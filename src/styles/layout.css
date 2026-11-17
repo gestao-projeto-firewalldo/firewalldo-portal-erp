@@ -1,0 +1,345 @@
+/* ================= Shell ================= */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+}
+.content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ================= Sidebar ================= */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  z-index: 40;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 84px;
+  padding: 0 28px;
+  flex: none;
+  color: var(--text);
+}
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.brand-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: var(--r);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--dur), color var(--dur);
+}
+.nav-link svg {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.6;
+  color: var(--text-2);
+  transition: color var(--dur);
+}
+.nav-link:hover {
+  background: var(--surface-hover);
+}
+.nav-link.active {
+  background: var(--nav-active);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+.nav-link.active svg {
+  color: var(--primary-text);
+}
+.nav-link .count {
+  margin-left: auto;
+  min-width: 24px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: normal;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.sidebar-user {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 26px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  width: 100%;
+}
+.sidebar-user:hover {
+  background: var(--surface-hover);
+}
+.sidebar-user .name {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.25;
+}
+.sidebar-user .role {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.sidebar-demo {
+  margin: 0 20px 14px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  border: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ================= Header ================= */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--header-h);
+  padding: 0 var(--gutter);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  min-width: 0;
+}
+.crumbs a {
+  color: var(--text-2);
+}
+.crumbs a:hover {
+  color: var(--text);
+}
+.crumbs .crumb-root {
+  display: inline-flex;
+}
+.crumbs .crumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+.crumbs svg {
+  color: var(--muted);
+  flex: none;
+}
+.crumbs span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.header-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+.demo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.demo-chip i {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--warning);
+}
+.icon-btn.menu-btn {
+  display: none;
+}
+
+/* ================= Main ================= */
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 28px var(--gutter) 48px;
+}
+.page {
+  max-width: 1440px;
+  margin: 0 auto;
+  animation: fade-in 240ms var(--ease) both;
+}
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.page-head h1 {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.page-head h1 svg {
+  display: none;
+}
+.page-head p {
+  color: var(--text-2);
+  margin-top: 6px;
+}
+.page-head .actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.toolbar .grow {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ================= Responsivo ================= */
+@media (max-width: 1100px) {
+  .brand {
+    justify-content: center;
+    padding: 0;
+  }
+  .brand-name,
+  .nav-link span,
+  .nav-link .count,
+  .sidebar-user .who,
+  .sidebar-demo {
+    display: none;
+  }
+  .nav-link {
+    justify-content: center;
+    padding: 0;
+  }
+  .sidebar-user {
+    justify-content: center;
+    padding: 18px 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-w);
+    transform: translateX(-102%);
+    transition: transform 280ms var(--ease);
+    z-index: 70;
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open {
+    transform: none;
+  }
+  .brand {
+    justify-content: flex-start;
+    padding: 0 24px;
+  }
+  .brand-name,
+  .nav-link span,
+  .nav-link .count,
+  .sidebar-user .who,
+  .sidebar-demo {
+    display: revert;
+  }
+  .nav-link {
+    justify-content: flex-start;
+    padding: 0 18px;
+  }
+  .sidebar-user {
+    justify-content: flex-start;
+    padding: 18px 24px;
+  }
+  .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    z-index: 60;
+    animation: fade-in 200ms both;
+  }
+  .icon-btn.menu-btn {
+    display: inline-grid;
+    margin-left: -8px;
+  }
+  .header {
+    gap: 8px;
+  }
+  .crumbs {
+    font-size: 15px;
+  }
+  .crumbs .crumb-root,
+  .crumbs .crumb-sep,
+  .demo-chip .txt,
+  .header-divider {
+    display: none;
+  }
+  .page-head h1 {
+    font-size: 30px;
+  }
+  .main {
+    padding-top: 20px;
+  }
+}

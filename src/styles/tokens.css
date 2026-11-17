@@ -1,0 +1,111 @@
+/* =========================================================
+   Firewalldo · Design tokens (V1.1 — minimalista)
+   Fundo azul-marinho plano · azul como cor principal ·
+   bordas sutis · sem brilhos.
+   ========================================================= */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0b1426;
+  --sidebar: #0c1629;
+  --surface: #0f1a2e;
+  --surface-2: #132038;
+  --surface-3: #1a2945;
+  --surface-hover: #15233d;
+  --overlay: rgba(3, 8, 18, 0.7);
+
+  --border: #1f2d47;
+  --border-soft: #182640;
+  --border-strong: #3b82f6;
+
+  --text: #f1f5fb;
+  --text-2: #a3b1c6;
+  --muted: #6b7a93;
+  --on-primary: #ffffff;
+
+  --primary: #3b82f6;
+  --primary-2: #2563eb;
+  --primary-text: #60a5fa;
+  --primary-soft: rgba(59, 130, 246, 0.14);
+  --nav-active: #172a4d;
+  --electric: #60a5fa;
+  --electric-soft: rgba(96, 165, 250, 0.12);
+
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+
+  --media-bg: #0a1220;
+
+  --shadow: none;
+  --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+
+  --r-sm: 8px;
+  --r: 10px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --sidebar-w: 280px;
+  --header-h: 64px;
+  --gutter: 32px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 180ms;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f6fa;
+  --sidebar: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f6f8fc;
+  --surface-3: #eaeef5;
+  --surface-hover: #f0f4fa;
+  --overlay: rgba(10, 20, 40, 0.4);
+
+  --border: #e1e6ef;
+  --border-soft: #ebeff5;
+  --border-strong: #2563eb;
+
+  --text: #0f172a;
+  --text-2: #475569;
+  --muted: #8391a7;
+
+  --primary: #2563eb;
+  --primary-2: #1d4ed8;
+  --primary-text: #2563eb;
+  --primary-soft: rgba(37, 99, 235, 0.1);
+  --nav-active: #e8f0fe;
+  --electric: #3b82f6;
+  --electric-soft: rgba(59, 130, 246, 0.1);
+
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+
+  --media-bg: #eef2f8;
+  --shadow-lg: 0 24px 60px -20px rgba(15, 23, 42, 0.25);
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-w: 84px;
+    --gutter: 24px;
+  }
+}
+@media (max-width: 860px) {
+  :root {
+    --sidebar-w: 280px;
+    --header-h: 58px;
+    --gutter: 16px;
+  }
+}

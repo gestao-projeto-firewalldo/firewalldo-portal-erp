@@ -1,0 +1,25 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+	@api path /api /api/*
+	handle @api {
+		request_body {
+			max_size 512KB
+		}
+		reverse_proxy {$API_UPSTREAM:localhost:3333}
+	}
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

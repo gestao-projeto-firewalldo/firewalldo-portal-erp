@@ -1,0 +1,392 @@
+=====================================================================
+ FIREWALLDO · PORTAL DE DESENVOLVIMENTO
+ Guia do Front-end para quem vai construir o Back-end   (Front-end V1.2)
+=====================================================================
+
+Este arquivo explica como o front-end funciona e EXATAMENTE o que ele espera
+da API. Foi escrito para ser lido por uma pessoa ou colado em um assistente de
+IA (ChatGPT, Claude etc.) como contexto para gerar o back-end.
+
+Resumo em uma frase:
+  O front já está pronto e funciona sozinho com dados simulados; para ligar no
+  back-end basta implementar as rotas REST listadas na seção 6, devolvendo JSON
+  no formato dos tipos da seção 5, e iniciar o front com VITE_DATA_SOURCE=api.
+
+
+---------------------------------------------------------------------
+ 1. STACK E COMO RODAR
+---------------------------------------------------------------------
+- React 18 + TypeScript + Vite 6 + React Router 6 + lucide-react (ícones).
+- Sem framework de UI; CSS próprio em src/styles.
+- Node 18+ (testado com Node 26).
+
+  npm install
+  npm run dev        -> http://localhost:5173
+  npm run build      -> checagem de tipos + build de produção em dist/
+
+O build gera arquivos estáticos (dist/). Pode ser servido por qualquer servidor
+estático. Como usa rotas no navegador (BrowserRouter), o servidor deve devolver
+index.html para qualquer caminho desconhecido (fallback de SPA).
+
+
+---------------------------------------------------------------------
+ 2. MODO DEMONSTRAÇÃO x MODO API
+---------------------------------------------------------------------
+Arquivo: src/config.ts
+
+  VITE_DATA_SOURCE = mock (padrão) | api
+  VITE_API_URL     = URL base da API (padrão: http://localhost:3333/api)
+
+Crie um arquivo .env na raiz do front:
+
+  VITE_DATA_SOURCE=api
+  VITE_API_URL=http://localhost:3333/api
+
+- mock: usa os dados de src/mocks/data.ts, com atraso artificial de 250–650 ms
+  e persistência apenas no localStorage do navegador (chave firewalldo-portal:v3).
+  NADA disso é banco de dados; serve só para demonstrar as telas.
+- api: todas as telas passam a chamar a API real. As telas NÃO mudam.
+
+
+---------------------------------------------------------------------
+ 3. ARQUITETURA (onde mexer)
+---------------------------------------------------------------------
+src/
+  types/models.ts       CONTRATO DE DADOS. Formato de todos os objetos.
+  services/index.ts     ÚNICO lugar que busca/grava dados. Cada método tem:
+                          if (useApi()) return http.<verbo>('/rota', corpo)
+                          senão -> usa o mock
+                        Procure por "TODO(api)": cada um indica a rota esperada.
+  services/core.ts      Cliente HTTP (fetch), simulação do mock, utilitários.
+  mocks/data.ts         Dados fictícios (servem de EXEMPLO do JSON esperado).
+  context/SessionContext.tsx  Usuário logado, lista de usuários/projetos e
+                        a matriz de permissões por perfil (rolePermissions).
+  hooks/useQuery.ts     Estados de carregando / erro / dados das telas.
+  pages/                Telas (Início, Radar, Ideias, Projetos, Tarefas,
+                        Usuários, Configurações; Biblioteca e Relatórios
+                        existem fora do menu).
+  components/           Layout (menu/cabeçalho), modal de tarefa, UI.
+
+Fluxo de dados:
+  Tela -> useQuery(() => xxxService.metodo()) -> services/index.ts -> http -> API
+  Depois de qualquer POST/PATCH/PUT/DELETE bem-sucedido, o cliente HTTP dispara
+  um aviso global e todas as telas abertas recarregam seus dados em segundo
+  plano (não precisa implementar nada para isso).
+
+
+---------------------------------------------------------------------
+ 4. CONVENÇÕES DA API
+---------------------------------------------------------------------
+- JSON em UTF-8, nomes de campos em camelCase (exatamente como na seção 5).
+- IDs são STRINGS (ex.: "u-victor", "t-12", ou UUID). Não use número.
+- Datas sem hora: "AAAA-MM-DD" (ISODate). Ex.: "2026-11-20".
+- Campos opcionais podem vir ausentes; listas vazias devem vir como [].
+- Sucesso: 200/201 com JSON. Sem corpo: 204 No Content (o front aceita).
+- Erro: status 4xx/5xx com corpo JSON:
+      { "message": "Texto para mostrar ao usuário", "code": "NO_SLOTS" }
+  O front mostra "message" num aviso na tela. Códigos usados pelo front:
+      NOT_FOUND (404), CONFLICT (409), NO_SLOTS (409), FORBIDDEN (403).
+- Autenticação: o cliente envia
+      Authorization: Bearer <token>
+  se existir um token salvo no localStorage com a chave "fw:token".
+  (A tela de login ainda não existe. Ver seção 9.)
+- CORS: liberar a origem do front (em dev: http://localhost:5173) e os
+  cabeçalhos Content-Type e Authorization.
+
+
+---------------------------------------------------------------------
+ 5. MODELOS DE DADOS (copiados de src/types/models.ts)
+---------------------------------------------------------------------
+
+Role            = "admin" | "usuario"
+PresenceStatus  = "online" | "offline"
+Category        = "programacao" | "design" | "conteudo" | "marketing"
+                  | "infraestrutura" | "gestao"
+TaskStatus      = "backlog" | "a_fazer" | "em_andamento" | "concluido"
+Priority        = "baixa" | "media" | "alta" | "critica"
+ProjectStatus   = "planejamento" | "em_andamento" | "pausado" | "concluido"
+IdeaStatus      = "nova" | "em_analise" | "aprovada" | "arquivada"
+IdeaCategory    = "video" | "educacao" | "redes_sociais" | "pratica"
+                  | "guia" | "bastidores"
+NewsCategory    = "ciberseguranca" | "redes" | "informatica" | "programacao"
+                  | "ia" | "privacidade"
+
+--- Member (usuário) ---
+{
+  "id": "u-victor",
+  "name": "Victor Pereira",
+  "initials": "VP",                    // pode ser calculado no back
+  "email": "victor.pereira@firewalldo.example",
+  "role": "admin",                     // Role
+  "title": "Desenvolvedor Back-end",   // função exibida
+  "areas": ["programacao"],            // Category[]
+  "status": "online",                  // PresenceStatus (presença)
+  "color": "#2563eb",                  // cor do círculo do avatar
+  "avatarUrl": null,                   // opcional (foto)
+  "bio": "texto opcional",
+  "active": true                       // false = desativado
+}
+
+--- Project ---
+{
+  "id": "p-app",
+  "name": "App · Front-end",
+  "subtitle": "Interface do app da plataforma de cursos",
+  "description": "texto",
+  "icon": "code",          // code|layout|smartphone|play|globe|palette|shield|server
+  "color": "#3b82f6",
+  "status": "em_andamento",
+  "ownerIds": ["u-victor", "u-wesley"],     // colaboradores
+  "milestones": [ { "id": "m1", "title": "Protótipo", "dueDate": "2026-10-01", "done": true } ],
+  "startDate": "2026-09-01",
+  "dueDate": "2027-03-15",
+  "progress": 50           // 0-100 (ver regra na seção 7)
+}
+
+--- Task (tarefa) ---
+{
+  "id": "t-1",
+  "title": "Levantar requisitos do novo módulo",
+  "description": "texto",
+  "projectId": "p-app",            // ou null
+  "category": "gestao",            // Category
+  "status": "backlog",             // TaskStatus (coluna do Kanban)
+  "priority": "media",             // Priority
+  "assigneeIds": ["u-camila"],     // responsáveis
+  "open": true,                    // aberta para aceitar
+  "maxAssignees": 3,               // limite de vagas -> "Lim. 1/3"
+  "dueDate": "2026-12-01",         // ou null
+  "checklist": [ { "id": "c1", "text": "Item", "done": false } ],
+  "createdBy": "u-victor",
+  "createdAt": "2026-11-03",
+  "updatedAt": "2026-11-10",
+  "order": 1                       // posição dentro da coluna
+}
+TaskInput (criação) = Task sem id, createdAt, updatedAt, order, createdBy.
+
+--- Idea ---
+{
+  "id": "i-1",
+  "title": "Série sobre golpes no Pix",
+  "description": "texto",
+  "category": "video",       // IdeaCategory
+  "status": "aprovada",      // IdeaStatus
+  "authorId": "u-camila",
+  "votes": 12,               // total de "Gostei"
+  "votedByMe": false,        // se o usuário LOGADO deu "Gostei"
+  "createdAt": "2026-11-10"
+}
+IdeaInput (criação) = { "title", "description", "category" }
+
+--- NewsItem (Radar) ---
+{
+  "id": "n-1",
+  "title": "Título",
+  "summary": "Resumo curto",
+  "body": ["parágrafo 1", "parágrafo 2"],
+  "category": "ciberseguranca",
+  "source": "CERT.br",              // nome da fonte
+  "url": "https://...",             // opcional: link da matéria original
+  "imageUrl": "https://...",        // opcional (hoje o front desenha uma capa)
+  "publishedAt": "2026-11-11",
+  "readMinutes": 4,
+  "featured": true,                 // destaque no topo do Radar
+  "cover": "lock",                  // lock|router|chip|ai|code|eye|wifi|bug (capa desenhada)
+  "isDemo": false                   // true só nas notícias fictícias atuais
+}
+
+--- RadarSource (fonte do Radar) ---
+{ "id": "src-cert", "name": "CERT.br", "short": "CB",
+  "url": "https://www.cert.br/", "description": "texto", "active": true }
+
+--- Shortcut (atalho do "Acesso rápido") ---
+{ "id": "sc-drive", "label": "Google Drive", "url": "https://drive.google.com/",
+  "icon": "drive" }   // icon: drive|youtube|instagram|tiktok|landing|mindmap|link
+  url vazia ("") = atalho ainda não configurado.
+
+--- AppNotification ---
+{ "id": "nt-1", "kind": "tarefa", "title": "Tarefa concluída",
+  "description": "texto", "createdAt": "há 23 min", "read": false }
+  kind: tarefa|projeto|noticia|sistema
+  Obs.: createdAt hoje é exibido como texto pronto. Se preferir mandar ISO
+  (ex.: "2026-11-12T14:03:00Z"), avise o front para formatar.
+
+--- UserPreferences ---
+{ "theme": "dark", "reducedMotion": false,
+  "notifications": { "taskAssigned": true, "taskDue": true,
+                     "projectUpdates": true, "newsDigest": false, "email": false } }
+
+
+---------------------------------------------------------------------
+ 6. ROTAS ESPERADAS (todas relativas a VITE_API_URL)
+---------------------------------------------------------------------
+Formato:  MÉTODO  /rota   corpo  ->  resposta   [quem pode]
+
+SESSÃO
+  GET    /auth/me                         -> Member (usuário logado)      [logado]
+
+USUÁRIOS
+  GET    /users                           -> Member[]                     [logado]
+  POST   /users        MemberInput        -> Member (201)                 [admin]
+         MemberInput = { name, email, role, title }
+         409 CONFLICT se o e-mail já existir. Envio de convite/senha é do back.
+  PATCH  /users/:id    { name?, title?, bio?, role?, active?, areas? } -> Member
+         [admin; ou o próprio usuário para name/title/bio]
+
+PROJETOS
+  GET    /projects                        -> Project[]                    [logado]
+  GET    /projects/:id                    -> Project  (404 NOT_FOUND)     [logado]
+  POST   /projects     { name, subtitle, description, icon, color, dueDate, ownerIds }
+                                          -> Project (201)                [admin]
+  PATCH  /projects/:id/milestones/:milestoneId   (alterna done)  -> Project [admin]
+
+TAREFAS
+  GET    /tasks                           -> Task[] ordenado por "order"  [logado]
+         (filtros opcionais futuros: ?projectId=&assigneeId=&status=)
+  POST   /tasks        TaskInput          -> Task (201)                   [admin]
+  PATCH  /tasks/:id    Partial<Task>      -> Task
+         [admin: qualquer campo | responsável: status e checklist]
+         O checklist é salvo por esta mesma rota: { "checklist": [...] }
+  PATCH  /tasks/:id/move  { status, beforeId }  -> 204
+         Move de coluna. beforeId = id da tarefa que ficará logo abaixo
+         (null = final da coluna). Recalcular "order" da coluna.
+         [admin: qualquer | usuário: só tarefas em que é responsável]
+  POST   /tasks/:id/accept                -> Task                         [logado]
+         Usuário logado aceita uma vaga. Regras na seção 7.
+         409 NO_SLOTS se não houver vaga ou a tarefa não estiver aberta.
+  POST   /tasks/:id/leave                 -> Task  (sai da tarefa)        [logado]
+  DELETE /tasks/:id                       -> 204                          [admin]
+
+RADAR DE NOTÍCIAS
+  GET    /news                            -> NewsItem[]                   [logado]
+         Notícias coletadas SOMENTE das fontes com active=true.
+  GET    /news/saved                      -> string[] (ids salvos pelo usuário)
+  POST   /news/:id/save                   -> string[] atualizado (alterna salvar/remover)
+
+IDEIAS
+  GET    /ideas                           -> Idea[]  (votedByMe por usuário logado)
+  POST   /ideas        IdeaInput          -> Idea (201; status "nova", votes 0)
+  PATCH  /ideas/:id    { status }         -> 204 ou Idea                  [admin]
+  POST   /ideas/:id/vote                  -> 204   (alterna "Gostei"; 1 voto por usuário)
+
+NOTIFICAÇÕES
+  GET    /notifications                   -> AppNotification[] (do usuário logado)
+  POST   /notifications/read-all          -> 204
+
+CONFIGURAÇÕES (aba Integrações)
+  GET    /settings/radar-sources          -> RadarSource[]                [logado]
+  PUT    /settings/radar-sources  RadarSource[]  -> RadarSource[]         [admin]
+         Recebe a LISTA INTEIRA (ativar/pausar, adicionar). Ids novos criados no
+         front começam com "src-"; o back pode trocar por ids próprios.
+  GET    /settings/shortcuts              -> Shortcut[]                   [logado]
+  PUT    /settings/shortcuts      Shortcut[]     -> Shortcut[]            [admin]
+
+AINDA SÓ LOCAL (não chamam API hoje; ligar quando existir)
+  - Preferências pessoais (tema, notificações): salvas no navegador.
+    Sugestão: GET/PATCH /me/preferences -> UserPreferences.
+  - Biblioteca (fora do menu): GET /library/folders, GET /library/files,
+    upload futuro POST /library/files (multipart) -> Google Drive.
+  - Relatórios (fora do menu): calculados no front a partir de /tasks e /projects.
+
+
+---------------------------------------------------------------------
+ 7. REGRAS DE NEGÓCIO (o servidor deve validar; o front só ajuda)
+---------------------------------------------------------------------
+TAREFAS / KANBAN
+- Colunas: backlog -> a_fazer -> em_andamento -> concluido.
+- "Backlog" = vagas abertas. Uma tarefa aparece com botão "Aceitar tarefa"
+  quando open=true. O cartão mostra "Lim. X/Y" = assigneeIds.length / maxAssignees.
+- Aceitar (POST /tasks/:id/accept):
+    1. exige open=true e assigneeIds.length < maxAssignees (senão 409 NO_SLOTS);
+    2. adiciona o usuário logado em assigneeIds (sem duplicar);
+    3. se lotar (length == maxAssignees): open=false e, se estava em backlog,
+       status passa para "a_fazer".
+- Tarefas são criadas por ADMIN dentro de um projeto (tela do projeto ->
+  "Criar tarefa"). A tela Tarefas tem o link "Criar tarefa em Projetos".
+- Arrastar entre colunas: admin move qualquer tarefa; usuário só as suas.
+- "order" define a posição dentro da coluna (1, 2, 3...).
+
+PROJETOS
+- Progresso exibido = tarefas concluídas / tarefas do projeto (arredondado).
+  Se o projeto não tiver tarefas, o front usa o campo "progress".
+  Sugestão: devolver "progress" já calculado com esta regra.
+- "X de Y tarefas concluídas" também é calculado com /tasks.
+
+IDEIAS
+- Novas ideias nascem com status "nova" e 0 votos.
+- Filtros da tela: Todos | Em análise | Aprovadas, + Categoria.
+- Só admin muda status. Ideia "aprovada" pode virar tarefa (o front abre o
+  formulário de tarefa preenchido; a criação usa POST /tasks).
+
+USUÁRIOS
+- Perfis: admin ("Administrador") e usuario ("Usuário").
+- "Online agora" conta active=true e status="online". A regra de presença
+  (ex.: atividade nos últimos 5 min, WebSocket) é decisão do back.
+- Usuário desativado (active=false) continua listado, esmaecido.
+
+RADAR
+- As notícias atuais são FICTÍCIAS (isDemo=true). Com a coleta real, mande
+  isDemo=false e preencha "source" com o nome da fonte e "url" com o link.
+- "featured": o front mostra a primeira notícia destacada no topo.
+
+PERMISSÕES (src/context/SessionContext.tsx -> rolePermissions)
+  Permissão                    admin  usuario
+  tarefas.criar                  x
+  tarefas.editar_todas           x
+  tarefas.aceitar                x       x
+  projetos.gerenciar             x
+  biblioteca.enviar              x       x
+  usuarios.gerenciar             x
+  noticias.curar                 x
+  relatorios.ver                 x       x
+  configuracoes.integracoes      x
+  O front ESCONDE botões conforme o perfil, mas a API deve recusar (403
+  FORBIDDEN) qualquer ação sem permissão.
+
+
+---------------------------------------------------------------------
+ 8. TELAS x DADOS QUE CADA UMA USA
+---------------------------------------------------------------------
+Início (/)                 /tasks, /users, /projects, /notifications, /news,
+                           /settings/shortcuts
+Radar de notícias (/radar) /news, /news/saved, POST /news/:id/save
+                           (filtros: busca, Fonte, Categoria, Salvas)
+Ideias (/ideias)           /ideas, POST /ideas, PATCH /ideas/:id, POST /ideas/:id/vote
+Projetos (/projetos)       /projects, /tasks, POST /projects
+Projeto (/projetos/:id)    /projects/:id, /tasks, POST /tasks, PATCH milestones
+Tarefas (/tarefas)         /tasks (abas Kanban, Lista, Calendário — mesma rota),
+                           PATCH /tasks/:id/move, POST /tasks/:id/accept
+Usuários (/usuarios)       /users, POST /users, PATCH /users/:id
+Configurações              aba Geral: PATCH /users/:id (perfil), preferências (local)
+(/configuracoes)           aba Integrações: /settings/radar-sources, /settings/shortcuts
+                           aba Notificações: preferências (local)
+                           Tudo é salvo só ao clicar "Salvar alterações".
+Cabeçalho (todas)          /auth/me, /notifications, POST /notifications/read-all
+
+
+---------------------------------------------------------------------
+ 9. O QUE AINDA NÃO EXISTE NO FRONT (próximas etapas)
+---------------------------------------------------------------------
+- Tela de login. Combinar: POST /auth/login { email, senha } -> { token, user };
+  o front salvará o token em localStorage "fw:token" (o cliente HTTP já envia).
+  Ao receber 401, o front deverá redirecionar para o login (a fazer).
+- "Visualizar como" (Configurações -> Permissões) é só demonstração; no modo
+  API o perfil vem de /auth/me.
+- Notificações em tempo real (WebSocket/SSE): hoje é só GET.
+- Upload real de arquivos / Google Drive.
+- Coleta automática de notícias (RSS/API) das fontes ativas.
+
+
+---------------------------------------------------------------------
+ 10. CHECKLIST DE INTEGRAÇÃO
+---------------------------------------------------------------------
+[ ] Implementar GET /auth/me e GET /users, /projects, /tasks (telas já abrem).
+[ ] Liberar CORS para http://localhost:5173.
+[ ] Criar .env no front com VITE_DATA_SOURCE=api e VITE_API_URL.
+[ ] Implementar as escritas (seção 6) com as regras da seção 7.
+[ ] Devolver erros no formato { message, code }.
+[ ] Conferir cada tela da seção 8.
+[ ] Usar src/mocks/data.ts como seed/exemplo de dados, se quiser.
+
+Dúvidas sobre um campo: o tipo oficial está em src/types/models.ts e um
+exemplo real de cada objeto está em src/mocks/data.ts.
