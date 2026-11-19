@@ -2213,3 +2213,4 @@ div.quick.empty { cursor: default; }
 :root[data-theme='light'] .task-card .task-ticket { background:rgba(37,99,235,.08); color:#1d4ed8; border-color:rgba(37,99,235,.25); }
 :root[data-theme='light'] .task-card .btn.accept { color:#1d4ed8; border-color:#7ca6ed; background:rgba(255,255,255,.6); }
 :root[data-theme='light'] .task-card .btn.accept:disabled { color:#667085; border-color:#b7c9e2; }
+.backlog-candidates { display: grid; gap: 6px; min-width: 0; margin-bottom: 10px; }

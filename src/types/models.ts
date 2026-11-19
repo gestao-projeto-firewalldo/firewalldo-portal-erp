@@ -61,6 +61,7 @@ export interface Task {
   ticketNumber?: number;
   scheduleId?: ID | null;
   scheduledFor?: string | null;
+  scheduleIndividual?: boolean;
   id: ID;
   title: string;
   description: string;
@@ -83,7 +84,7 @@ export interface Task {
   order: number;
 }
 
-export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy' | 'scheduleId' | 'scheduledFor' | 'ticketNumber'>;
+export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy' | 'scheduleId' | 'scheduledFor' | 'scheduleIndividual' | 'ticketNumber'>;
 
 /* ---------------- Projetos ---------------- */
 
@@ -277,6 +278,8 @@ export type Permission =
 /* ---------------- Agenda de tarefas ---------------- */
 export type ScheduleKind = 'recurring' | 'weekly' | 'scheduled';
 export interface ScheduleInput {
+  initialStatus: 'backlog' | 'a_fazer';
+  maxAssignees: number;
   title: string;
   description: string;
   projectId: ID | null;

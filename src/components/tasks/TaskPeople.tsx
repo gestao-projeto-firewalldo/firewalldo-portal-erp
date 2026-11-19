@@ -5,7 +5,7 @@ import { Avatar, AvatarStack } from '@/components/ui';
 import type { Member } from '@/types/models';
 
 /** Overlapping faces and names, with a complete list on hover, focus or touch. */
-export function TaskPeople({ members }: { members: Member[] }) {
+export function TaskPeople({ members, label = 'Responsáveis' }: { members: Member[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 0, top: 0, width: 280 });
   const anchor = useRef<HTMLButtonElement>(null);
@@ -46,7 +46,7 @@ export function TaskPeople({ members }: { members: Member[] }) {
   if (!members.length) return <span className="muted small">Sem responsável</span>;
   const names = members.slice(0, 3).map(member => member.name.split(' ')[0]).join(', ');
   return <>
-    <button type="button" ref={anchor} className="task-people" aria-label={`Ver participantes: ${members.map(m => m.name).join(', ')}`}
+    <button type="button" ref={anchor} className="task-people" aria-label={`${label==='Responsáveis'?'Ver participantes':label}: ${members.map(m => m.name).join(', ')}`}
       aria-describedby={open ? id : undefined} aria-expanded={open}
       onMouseEnter={show} onMouseLeave={close} onFocus={show} onBlur={close}
       onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); setOpen(false); } }}
@@ -56,7 +56,7 @@ export function TaskPeople({ members }: { members: Member[] }) {
     </button>
     {open && createPortal(<div id={id} role="tooltip" ref={panel} className="task-people-popup" style={position}
       onMouseEnter={() => clearTimeout(timer.current)} onMouseLeave={close} onClick={event => event.stopPropagation()}>
-      <strong>Responsáveis · {members.length}</strong>
+      <strong>{label} · {members.length}</strong>
       <ul>{members.map(member => <li key={member.id}><Avatar member={member} size={32}/><span><b>{member.name}</b>{member.title && <small>{member.title}</small>}</span></li>)}</ul>
     </div>, document.body)}
   </>;

@@ -53,7 +53,8 @@ export default function Tasks() {
 
   const all = q.data ?? [];
   const filtered = useMemo(
-    () => all.filter((t) => (!project || t.projectId === project) && (!assignee || t.assigneeIds.includes(assignee))),
+    () => all.filter((t) => (!project || t.projectId === project) && (!assignee || t.assigneeIds.includes(assignee)
+      || t.status==='backlog' && t.open && isEligible(t,assignee))),
     [all, project, assignee],
   );
 
@@ -162,6 +163,7 @@ function Board({
                   meId={meId}
                   project={t.projectId ? projectsById[t.projectId] : undefined}
                   assignees={t.assigneeIds.map((id) => membersById[id]).filter(Boolean)}
+                  candidates={(t.eligibleAssigneeIds??[]).map(id=>membersById[id]).filter(Boolean)}
                   onOpen={() => onOpen(t)}
                   onAccept={() => onAccept(t)}
                 />
@@ -179,6 +181,7 @@ function TaskCard({
   meId,
   project,
   assignees,
+  candidates,
   onOpen,
   onAccept,
 }: {
@@ -186,6 +189,7 @@ function TaskCard({
   meId?: string;
   project?: Project;
   assignees: Member[];
+  candidates: Member[];
   onOpen: () => void;
   onAccept: () => void;
 }) {
@@ -213,6 +217,7 @@ function TaskCard({
 
       {isBacklog ? (
         <>
+          {candidates.length>0&&<div className="backlog-candidates"><span className="small muted">Podem aceitar</span><TaskPeople members={candidates} label="Podem aceitar"/></div>}
           <div className="tc-row">
             {assignees.length > 0 ? <TaskPeople members={assignees} /> : <span className="row muted" style={{gap:8}}><UserRound size={18} /> Aguardando aceites</span>}
             <span className="lim">

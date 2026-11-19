@@ -48,3 +48,8 @@ Regras persistentes diárias/a cada N dias, semanais e por datas selecionadas. A
 - Backlog com seleção de quem pode aceitar, separada dos aceites confirmados e do número de vagas necessárias para iniciar. Sem seleção, qualquer conta ativa pode aceitar.
 - Até três fotos redondas sobrepostas, sem bordas; nomes dos três primeiros participantes e lista completa ao passar o mouse, focar com teclado ou tocar.
 - No tema claro, coluna Em andamento em amarelo opaco e cartões amarelos mais claros. As cores do tema escuro foram mantidas.
+
+
+## Portal 1.1.12 — Agenda e Backlog
+
+O editor da Agenda oferece coluna de entrada Backlog/A fazer e número de vagas necessárias para iniciar. No Backlog, os vinculados são candidatos e podem exceder as vagas; sem seleção, qualquer conta ativa pode aceitar. Em A fazer, todos os vinculados recebem uma única tarefa compartilhada. O Kanban mostra os candidatos com fotos e nomes separados dos aceites. A mesma regra vale para tarefas normais, recorrentes, semanais e por datas. Próximas aberturas seguem a regra editada; tarefas antigas são preservadas.

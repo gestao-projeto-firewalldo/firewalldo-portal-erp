@@ -50,7 +50,7 @@ export function checklistProgress(t: Pick<Task, 'checklist' | 'status'>) {
 
 function editableTask(task?: Task): TaskInput {
   if (!task) return blank;
-  const { id, createdBy, createdAt, updatedAt, order, scheduleId, scheduledFor, ticketNumber, ...input } = task;
+  const { id, createdBy, createdAt, updatedAt, order, scheduleId, scheduledFor, scheduleIndividual, ticketNumber, ...input } = task;
   return input;
 }
 
@@ -79,7 +79,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   const set = <K extends keyof TaskInput>(k: K, v: TaskInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const toggleAssignee = (id: string) => {
-    if (existing?.scheduleId) return;
+    if (existing?.scheduleIndividual) return;
     const field = isBacklog ? 'eligibleAssigneeIds' : 'assigneeIds';
     const ids = form[field] ?? [];
     set(field, ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id]);
@@ -244,7 +244,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         </div>
       ) : (
         <div className="form-grid">
-          {existing?.scheduleId && <div className="notice full">Tarefa individual da Agenda. As alterações aqui valem só para esta ocorrência. Para mudar as próximas, edite a Agenda.</div>}
+          {existing?.scheduleId && <div className="notice full">Tarefa da Agenda. As alterações aqui valem só para esta ocorrência. Para mudar as próximas, edite a Agenda.</div>}
           <div className="field full">
             <label htmlFor="t-title">Título *</label>
             <input id="t-title" className="input" autoFocus value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Implementar tela de conquistas" />
@@ -286,7 +286,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           <div className="field">
             <label htmlFor="t-max">{isBacklog ? 'Vagas necessárias para iniciar' : 'Limite de responsáveis'}</label>
             <input
-              id="t-max" disabled={!!existing?.scheduleId}
+              id="t-max" disabled={!!existing?.scheduleIndividual}
               type="number"
               min={1}
               max={100}
@@ -314,7 +314,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             </div>
           </> : <div className="field full">
             <span className="label">Responsáveis</span>
-            <div className="chips">{members.filter(member => member.active || form.assigneeIds.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.assigneeIds.includes(member.id)&&'active')} disabled={!!existing?.scheduleId} aria-label={`Atribuir ${member.name}`} aria-pressed={form.assigneeIds.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>
+            <div className="chips">{members.filter(member => member.active || form.assigneeIds.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.assigneeIds.includes(member.id)&&'active')} disabled={!!existing?.scheduleIndividual} aria-label={`Atribuir ${member.name}`} aria-pressed={form.assigneeIds.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>
             {errors.assignees && <span className="form-error small">{errors.assignees}</span>}
           </div>}
           <div className="field full">
