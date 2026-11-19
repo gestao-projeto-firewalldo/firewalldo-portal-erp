@@ -13,7 +13,7 @@ export interface QueryState<T> {
  * Primeira carga mostra `loading`; mudanças locais posteriores (mockDb) recarregam
  * em segundo plano, sem piscar a tela.
  */
-export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []): QueryState<T> {
+export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = [], refreshMs = 60_000): QueryState<T> {
   const [data, setData] = useState<T>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -36,7 +36,7 @@ export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []): QuerySt
       })
       .catch((e: Error) => {
         if (id !== seq.current) return;
-        if (!silent) setError(e);
+        setError(e);
       })
       .finally(() => {
         if (id === seq.current) setLoading(false);
@@ -49,6 +49,12 @@ export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []): QuerySt
   }, deps);
 
   useEffect(() => mockDb.subscribe(() => run(true)), [run]);
+  useEffect(() => {
+    const refresh = () => { if(document.visibilityState === 'visible') run(true); };
+    window.addEventListener('focus',refresh);
+    const timer=window.setInterval(refresh,refreshMs);
+    return ()=>{window.removeEventListener('focus',refresh);window.clearInterval(timer);};
+  },[run,refreshMs]);
 
   return { data, loading, error, refetch: () => run(false) };
 }

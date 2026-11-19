@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  CalendarDays,
   ChevronRight,
   FileText,
   Home,
@@ -11,12 +12,14 @@ import {
   Menu,
   Newspaper,
   Settings,
+  ShieldCheck,
   SquareCheck,
   UserRound,
   Users,
 } from 'lucide-react';
 import { Avatar, Logo, Modal } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
+import { bindPushAccount, unsubscribeLocal } from '@/services/push';
 import { useQuery } from '@/hooks/useQuery';
 import { appConfig } from '@/config';
 import { http, useApi } from '@/services/core';
@@ -36,7 +39,9 @@ export const navItems = [
   { to: '/ideias', label: 'Ideias', icon: Lightbulb },
   { to: '/projetos', label: 'Projetos', icon: Layers },
   { to: '/tarefas', label: 'Tarefas', icon: SquareCheck },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/usuarios', label: 'Usuários', icon: Users },
+  { to: '/auditoria', label: 'Auditoria', icon: ShieldCheck },
   { to: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
@@ -65,7 +70,7 @@ export function Layout() {
 
 function Sidebar({ open }: { open: boolean }) {
   const q = useQuery(() => tasksService.list());
-  const { me } = useSession();
+  const { me, can } = useSession();
   const nav = useNavigate();
   const mine = (q.data ?? []).filter((t) => me && t.assigneeIds.includes(me.id) && t.status !== 'concluido').length;
   return (
@@ -75,7 +80,7 @@ function Sidebar({ open }: { open: boolean }) {
         <span className="brand-name">{appConfig.appName}</span>
       </Link>
       <nav className="nav">
-        {navItems.map(({ to, label, icon: Icon, end }) => (
+        {navItems.filter(item => item.to !== '/auditoria' || can('auditoria.ver')).map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => cx('nav-link', isActive && 'active')} title={label}>
             <Icon />
             <span>{label}</span>
@@ -83,10 +88,7 @@ function Sidebar({ open }: { open: boolean }) {
           </NavLink>
         ))}
       </nav>
-      <div className="sidebar-demo" style={{ marginTop: 'auto' }}>
-        {appConfig.version}{!useApi() && ' · modo demonstração'}
-      </div>
-      <button className="sidebar-user" style={{ marginTop: 0 }} onClick={() => nav('/configuracoes')} title="Perfil e configurações">
+      <button className="sidebar-user" style={{ marginTop: 'auto' }} onClick={() => nav('/configuracoes?perfil=editar')} title="Perfil e configurações">
         {me && <Avatar member={me} size={50} />}
         <div className="who">
           <div className="name">{me?.name ?? '…'}</div>
@@ -144,6 +146,8 @@ function Header({ onMenu }: { onMenu: () => void }) {
   const logout = async () => {
     try {
       await http.post('/auth/logout', {});
+      await bindPushAccount(null).catch(()=>{});
+      await unsubscribeLocal().catch(()=>{});
       window.location.assign('/');
     } catch (error) {
       toast({ tone: 'error', title: 'Não foi possível sair', description: (error as Error).message });
@@ -168,6 +172,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
       </button>
       <Crumbs />
       <div className="header-actions">
+        <span className="header-version" title="Versão do portal">{appConfig.version}</span>
         {!useApi() && <button className="demo-chip" onClick={() => setHelp(true)} title="Esta versão usa dados simulados" style={{ background: 'transparent' }}>
           <i /> <span className="txt">Modo demonstração</span>
         </button>}
@@ -194,7 +199,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
                   </div>
                 </button>
               ))}
-              <div className="small muted" style={{ padding: '10px 14px' }}>Notificações em tempo real chegam com o Back-end.</div>
+              <div className="small muted" style={{ padding: '10px 14px' }}>Notificações da sua conta. Atualizadas ao recarregar a página.</div>
             </div>
           )}
         </div>
@@ -209,7 +214,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
                 {me?.name}
                 <div className="small muted" style={{ fontWeight: 400 }}>{roleLabel[me?.role ?? 'usuario']}</div>
               </div>
-              <button className="dropdown-item" onClick={() => (close(), nav('/configuracoes'))}>
+              <button className="dropdown-item" onClick={() => (close(), nav('/configuracoes?perfil=editar'))}>
                 <UserRound size={18} /> Meu perfil
               </button>
               <button className="dropdown-item" onClick={() => (close(), setHelp(true))}>

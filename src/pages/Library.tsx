@@ -1,6 +1,6 @@
 import { useApi } from '@/services/core';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Download,
   ExternalLink,
@@ -16,12 +16,13 @@ import {
   List,
   PenTool,
   Upload,
+  Trash2,
 } from 'lucide-react';
 import { Async, Avatar, EmptyState, Modal, SearchInput, Seg, Skeleton } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
-import { libraryService } from '@/services';
+import { libraryService, settingsService } from '@/services';
 import { cx, fileKindLabel, fileSize, shortDate } from '@/lib/labels';
 import type { FileKind, LibraryFile } from '@/types/models';
 
@@ -47,6 +48,8 @@ const kindColor: Record<FileKind, string> = {
 export default function Library() {
   const foldersQ = useQuery(() => libraryService.folders());
   const filesQ = useQuery(() => libraryService.files());
+  const shortcuts = useQuery(() => settingsService.shortcuts());
+  const driveUrl = shortcuts.data?.find(s=>s.icon === 'drive')?.url;
   const { membersById, can } = useSession();
   const [params, setParams] = useSearchParams();
   const [folder, setFolder] = useState<string>('all');
@@ -97,13 +100,11 @@ export default function Library() {
           <h1>
             <Folder /> Biblioteca
           </h1>
-          <p>{useApi() ? 'O upload de arquivos ainda está indisponível.' : 'Central de arquivos de demonstração.'}</p>
+          <p>{useApi() ? 'Arquivos compartilhados com a equipe.' : 'Central de arquivos de demonstração.'}</p>
         </div>
         <div className="actions">
-          <a className="btn outline" href="https://drive.google.com/" target="_blank" rel="noreferrer" title="Link de exemplo configurável">
-            <HardDrive /> Abrir Drive
-          </a>
-          {!useApi() && can('biblioteca.enviar') && (
+          {driveUrl ? <a className="btn outline" href={driveUrl} target="_blank" rel="noreferrer"><HardDrive /> Abrir Drive</a> : <Link className="btn outline" to="/configuracoes?aba=integracoes"><HardDrive /> Configurar Drive</Link>}
+          {can('biblioteca.enviar') && (
             <button className="btn primary" onClick={() => setUpload(true)}>
               <Upload /> Enviar arquivo
             </button>
@@ -114,8 +115,7 @@ export default function Library() {
       <div className="notice" style={{ marginBottom: 18 }}>
         <HardDrive />
         <div>
-          <b>Integração com Google Drive reservada.</b> Nesta versão os arquivos são exemplos locais e os botões “Abrir no Drive”
-          apontam para links configuráveis. A sincronização real será feita pelo Back-end.
+          {useApi() ? 'Envie arquivos de até 5 MB. Eles ficam disponíveis para a equipe após recarregar ou acessar em outro computador.' : 'Arquivos de demonstração.'}
         </div>
       </div>
 
@@ -258,6 +258,9 @@ export default function Library() {
 }
 
 function PreviewModal({ file, folderName, ownerName, onClose }: { file: LibraryFile; folderName: string; ownerName?: string; onClose: () => void }) {
+  const { me, can } = useSession();
+  const toast = useToast();
+  const [removing,setRemoving] = useState(false);
   const Icon = kindIcon[file.kind];
   const canRender = !!file.previewUrl && ['image', 'video', 'audio', 'pdf'].includes(file.kind);
   return (
@@ -277,13 +280,16 @@ function PreviewModal({ file, folderName, ownerName, onClose }: { file: LibraryF
             <a className="btn" href={file.driveUrl} target="_blank" rel="noreferrer" title="Link de exemplo (sem integração real)">
               <ExternalLink /> Abrir no Drive
             </a>
-          ) : (
-            <button className="btn" disabled title="Arquivo local: ainda não está no Drive">
-              <ExternalLink /> Abrir no Drive
-            </button>
-          )}
+          ) : null}
+          {useApi() && (can('usuarios.gerenciar') || me?.id === file.ownerId) && <button className="btn danger" disabled={removing} onClick={async () => {
+            if (!confirm(`Excluir ${file.name}?`)) return;
+            setRemoving(true);
+            try { await libraryService.remove(file.id);toast({tone:'success',title:'Arquivo excluído'});onClose(); }
+            catch(error) { toast({tone:'error',title:'Não foi possível excluir',description:(error as Error).message}); }
+            finally {setRemoving(false);}
+          }}><Trash2 /> Excluir</button>}
           {file.previewUrl ? (
-            <a className="btn primary" href={file.previewUrl} download={file.name}>
+            <a className="btn primary" href={useApi() ? `${file.previewUrl}?download=true` : file.previewUrl} download={file.name}>
               <Download /> Baixar
             </a>
           ) : (
@@ -302,8 +308,8 @@ function PreviewModal({ file, folderName, ownerName, onClose }: { file: LibraryF
         {!canRender && (
           <div className="state">
             <span className="icon-tile" style={{ '--c': kindColor[file.kind], '--s': '72px' } as CSSProperties}><Icon /></span>
-            <h3>Prévia indisponível na demonstração</h3>
-            <p>Este é um arquivo de exemplo sem conteúdo real. A prévia funcionará com os arquivos do Drive.</p>
+            <h3>Prévia indisponível para este formato</h3>
+            <p>Use Baixar para abrir o arquivo no seu computador.</p>
           </div>
         )}
       </div>
@@ -330,21 +336,26 @@ function UploadModal({
   const [folder, setFolder] = useState(defaultFolder ?? '');
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error,setError] = useState('');
 
   const handle = async (list: FileList | null) => {
     if (!list?.length || !folder) return;
-    setBusy(true);
-    for (const f of Array.from(list)) {
-      const entry = await libraryService.addLocal(f, folder);
-      if (entry.previewUrl) onAdded(entry.id, entry.previewUrl);
-    }
-    setBusy(false);
-    toast({ tone: 'success', title: `${list.length} arquivo(s) adicionado(s)`, description: 'Somente nesta sessão do navegador — não foi enviado a nenhum servidor.' });
-    onClose();
+    if (busy) return;
+    setBusy(true);setError('');
+    try {
+      for (const f of Array.from(list)) {
+        const entry=await libraryService.addLocal(f,folder);
+        if (entry.previewUrl) onAdded(entry.id,entry.previewUrl);
+      }
+      toast({tone:'success',title:`${list.length} arquivo(s) enviado(s)`,description:useApi()?'Arquivos salvos e disponíveis para a equipe.':'Somente nesta sessão.'});
+      onClose();
+    } catch(error) { setError((error as Error).message); }
+    finally {setBusy(false);}
+
   };
 
   return (
-    <Modal open onClose={onClose} title="Enviar arquivo" subtitle="Simulação local: o arquivo não sai do seu computador." icon={<span className="icon-tile"><Upload /></span>} width={560}>
+    <Modal open onClose={onClose} title="Enviar arquivo" error={error} subtitle={useApi() ? 'Até 5 MB por arquivo, disponíveis para a equipe.' : 'Simulação local.'} icon={<span className="icon-tile"><Upload /></span>} width={560}>
       <div className="field" style={{ marginBottom: 14 }}>
         <label htmlFor="up-f">Pasta de destino</label>
         <select id="up-f" className="select" value={folder} onChange={(e) => setFolder(e.target.value)}>

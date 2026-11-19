@@ -66,6 +66,7 @@ export const projectStatusLabel: Record<ProjectStatus, string> = {
 };
 
 export const roleLabel: Record<Role, string> = {
+  superadmin: 'Administrador geral',
   admin: 'Administrador',
   usuario: 'Usuário',
 };
@@ -156,3 +157,6 @@ export function fileSize(bytes: number) {
 }
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
+
+/** Global launch number, assigned by the database, never by the browser. */
+export const ticketLabel = (task: {ticketNumber?: number}) => task.ticketNumber ? `ticket${String(task.ticketNumber).padStart(2,'0')}` : '';

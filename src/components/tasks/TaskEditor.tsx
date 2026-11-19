@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { CalendarDays, CheckSquare, Hand, ListChecks, Plus, Save, Trash2, X } from 'lucide-react';
 import { Avatar, CategoryBadge, Modal, PriorityBadge, Progress } from '@/components/ui';
+import { FormDateInput } from '@/components/ui/DateInput';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
-import { categoryLabel, cx, priorityLabel, shortDate, statusLabel, statusOrder } from '@/lib/labels';
+import { categoryLabel, cx, priorityLabel, shortDate, statusLabel, statusOrder, ticketLabel } from '@/lib/labels';
 import { tasksService } from '@/services';
 import { uid } from '@/services/core';
 import type { Category, ChecklistItem, Priority, Task, TaskInput } from '@/types/models';
@@ -44,7 +45,7 @@ export function checklistProgress(t: Pick<Task, 'checklist' | 'status'>) {
 
 function editableTask(task?: Task): TaskInput {
   if (!task) return blank;
-  const { id, createdBy, createdAt, updatedAt, order, ...input } = task;
+  const { id, createdBy, createdAt, updatedAt, order, scheduleId, scheduledFor, ticketNumber, ...input } = task;
   return input;
 }
 
@@ -57,24 +58,24 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   const isAssignee = !!existing && !!me && existing.assigneeIds.includes(me.id);
   const editable = existing ? canEditAll : canCreate;
 
-  const [form, setForm] = useState<TaskInput>(() => ({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}) }));
+  const [form, setForm] = useState<TaskInput>(() => ({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) }));
   const [newItem, setNewItem] = useState('');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setForm({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}) });
+    setForm({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) });
   }, [existing, args.prefill]);
 
   const set = <K extends keyof TaskInput>(k: K, v: TaskInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const toggleAssignee = (id: string) =>
-    set('assigneeIds', form.assigneeIds.includes(id) ? form.assigneeIds.filter((x) => x !== id) : [...form.assigneeIds, id]);
+    !existing?.scheduleId && set('assigneeIds', form.assigneeIds.includes(id) ? form.assigneeIds.filter((x) => x !== id) : [...form.assigneeIds, id]);
 
   const toggleItem = async (item: ChecklistItem) => {
     const next = form.checklist.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c));
     set('checklist', next);
-    if (existing && !editable && isAssignee) await tasksService.setChecklist(existing.id, next);
+    if (existing && !editable && isAssignee) { try { await tasksService.setChecklist(existing.id, next); } catch(error) { set('checklist',form.checklist);toast({tone:'error',title:'Não foi possível salvar o checklist',description:(error as Error).message}); } }
   };
 
   const addItem = () => {
@@ -84,6 +85,8 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   };
 
   const save = async () => {
+    const date=document.getElementById('t-due') as HTMLInputElement|null;
+    if(date && !date.checkValidity()){date.reportValidity();setErrors({dueDate:date.validationMessage});return;}
     const e: Record<string, string> = {};
     if (form.title.trim().length < 3) e.title = 'Informe um título com pelo menos 3 caracteres.';
     if (!form.open && form.assigneeIds.length === 0 && form.status !== 'backlog')
@@ -111,16 +114,14 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
 
   const remove = async () => {
     if (!existing || !confirm(`Excluir a tarefa "${existing.title}"?`)) return;
-    await tasksService.remove(existing.id);
-    toast({ tone: 'info', title: 'Tarefa excluída' });
-    onClose();
+    try {await tasksService.remove(existing.id);toast({ tone:'info',title:'Tarefa excluída' });onClose();}
+    catch(error) {toast({tone:'error',title:'Não foi possível excluir',description:(error as Error).message});}
   };
 
   const accept = async () => {
     if (!existing) return;
-    await tasksService.accept(existing.id);
-    toast({ tone: 'success', title: 'Você aceitou a tarefa', description: existing.title });
-    onClose();
+    try {await tasksService.accept(existing.id);toast({tone:'success',title:'Você aceitou a tarefa',description:existing.title});onClose();}
+    catch(error) {toast({tone:'error',title:'Não foi possível aceitar',description:(error as Error).message});}
   };
 
   const progress = checklistProgress(form);
@@ -132,7 +133,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         open
         onClose={onClose}
         width={680}
-        title={existing.title}
+        title={<>{ticketLabel(existing)&&<span className="task-ticket">{ticketLabel(existing)}</span>} {existing.title}</>}
         subtitle={existing.projectId ? projects.find((p) => p.id === existing.projectId)?.name : 'Sem projeto'}
         icon={<span className="icon-tile"><ListChecks /></span>}
         footer={
@@ -147,7 +148,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         }
       >
         <div className="row" style={{ flexWrap: 'wrap', marginBottom: 14 }}>
-          <span className="badge outline">{statusLabel[existing.status]}</span>
+          <span className="badge outline">{statusLabel[form.status]}</span>
           <PriorityBadge p={existing.priority} />
           <CategoryBadge c={existing.category} />
           {existing.open && <span className="badge soft" style={{ '--c': 'var(--success)' } as CSSProperties}>Aberta para aceitar</span>}
@@ -155,6 +156,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <span className="badge outline"><CalendarDays /> {shortDate(existing.dueDate)}</span>
           )}
         </div>
+        {isAssignee && <div className="field" style={{marginBottom:16}}><label htmlFor="own-task-status">Status da minha tarefa</label><select id="own-task-status" className="select" value={form.status} onChange={async e=>{const status=e.target.value as Task['status'];try{await tasksService.update(existing.id,{status});set('status',status);toast({tone:'success',title:'Status atualizado'});}catch(error){toast({tone:'error',title:'Não foi possível atualizar',description:(error as Error).message});}}}>{statusOrder.filter(s=>s!=='backlog').map(s=><option key={s} value={s}>{statusLabel[s]}</option>)}</select></div>}
         <p className="muted" style={{ marginBottom: 16 }}>{existing.description || 'Sem descrição.'}</p>
         <div className="label" style={{ marginBottom: 8 }}>Responsáveis</div>
         <div className="row" style={{ flexWrap: 'wrap', marginBottom: 16 }}>
@@ -191,7 +193,8 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
       open
       onClose={onClose}
       width={760}
-      title={existing ? 'Editar tarefa' : 'Nova tarefa'}
+      title={existing ? <>{ticketLabel(existing)&&<span className="task-ticket">{ticketLabel(existing)}</span>} Editar tarefa</> : 'Nova tarefa'}
+      error={Object.values(errors).join(' ')}
       subtitle={existing ? `Criada em ${shortDate(existing.createdAt)} · atualizada em ${shortDate(existing.updatedAt)}` : undefined}
       icon={<span className="icon-tile"><CheckSquare /></span>}
       footer={
@@ -215,6 +218,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         </div>
       ) : (
         <div className="form-grid">
+          {existing?.scheduleId && <div className="notice full">Tarefa individual da Agenda. As alterações aqui valem só para esta ocorrência. Para mudar as próximas, edite a Agenda.</div>}
           <div className="field full">
             <label htmlFor="t-title">Título *</label>
             <input id="t-title" className="input" autoFocus value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Implementar tela de conquistas" />
@@ -226,7 +230,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field">
             <label htmlFor="t-proj">Projeto</label>
-            <select id="t-proj" className="select" value={form.projectId ?? ''} onChange={(e) => set('projectId', e.target.value || null)}>
+            <select id="t-proj" className="select" value={form.projectId ?? ''} onChange={(e) => { const projectId=e.target.value || null; const category=projects.find(p=>p.id===projectId)?.category;setForm(f=>({...f,projectId,...(!existing && category ? {category} : {})})); }}>
               <option value="">Sem projeto</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -251,12 +255,12 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field">
             <label htmlFor="t-due">Prazo</label>
-            <input id="t-due" type="date" className="input" value={form.dueDate ?? ''} onChange={(e) => set('dueDate', e.target.value || null)} />
+            <FormDateInput id="t-due" value={form.dueDate} onChange={iso => set('dueDate', iso || null)} />
           </div>
           <div className="field">
             <label htmlFor="t-max">Vagas (limite de responsáveis)</label>
             <input
-              id="t-max"
+              id="t-max" disabled={!!existing?.scheduleId}
               type="number"
               min={1}
               max={20}
@@ -267,18 +271,19 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field full">
             <label className="check">
-              <input type="checkbox" className="switch" checked={form.open} onChange={(e) => set('open', e.target.checked)} />
+              <input type="checkbox" className="switch" disabled={!!existing?.scheduleId} checked={form.open} onChange={(e) => set('open', e.target.checked)} />
               <span>Tarefa aberta: usuários podem aceitar enquanto houver vaga (aparece no Backlog)</span>
             </label>
           </div>
           <div className="field full">
             <span className="label">Responsáveis</span>
             <div className="chips">
-              {members.map((m) => (
+              {members.filter(m=>m.active || form.assigneeIds.includes(m.id)).map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   className={cx('chip', form.assigneeIds.includes(m.id) && 'active')}
+                  disabled={!!existing?.scheduleId} aria-label={`Atribuir ${m.name}`} aria-pressed={form.assigneeIds.includes(m.id)}
                   onClick={() => toggleAssignee(m.id)}
                   style={{ paddingLeft: 4 }}
                 >

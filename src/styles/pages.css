@@ -2003,3 +2003,20 @@ button.select-pill {
   display: grid;
   gap: 16px;
 }
+
+/* Each shortcut has its own save/cancel actions. */
+.shortcut-row { grid-template-columns:40px minmax(120px,180px) minmax(180px,1fr) auto; }
+.shortcut-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.shortcut-row .form-error { grid-column:1 / -1; }
+@media(max-width:760px) {
+  .shortcut-row { grid-template-columns:32px minmax(0,1fr); }
+  .shortcut-row .input { grid-column:1 / -1; }
+  .shortcut-actions { grid-column:1 / -1; }
+  .shortcut-row .btn.icon { grid-row:auto; grid-column:auto; }
+}
+
+.news-cover {position:relative;overflow:hidden;}
+.news-cover img {width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0;}
+.radar-collector .data-table td:last-child {min-width:220px;white-space:normal;}
+.radar-collector .notice p {margin-top:6px;}
+.source-row .grow {min-width:0;overflow-wrap:anywhere;}

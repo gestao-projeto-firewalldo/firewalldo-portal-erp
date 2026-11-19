@@ -2,13 +2,14 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarDays, Flag, Layers, ListChecks, Plus, Save } from 'lucide-react';
 import { Async, AvatarStack, EmptyState, Modal, Progress, SearchInput, Skeleton, SoftBadge } from '@/components/ui';
+import { FormDateInput } from '@/components/ui/DateInput';
 import { ProjectIcon } from '@/components/shared';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
-import { projectsService, tasksService } from '@/services';
-import { cx, projectStatusLabel, shortDate } from '@/lib/labels';
-import type { Project, ProjectStatus } from '@/types/models';
+import { projectsService, tasksService, uid } from '@/services';
+import { categoryLabel, cx, projectStatusLabel, shortDate } from '@/lib/labels';
+import type { Category, Project, ProjectStatus } from '@/types/models';
 import { projectProgress } from '@/lib/progress';
 
 export const projectStatusColor: Record<ProjectStatus, string> = {
@@ -92,6 +93,7 @@ export default function Projects() {
                     </div>
                   </div>
                   <div className="row" style={{ flexWrap: 'wrap' }}>
+                    {p.category && <span className="badge outline">{categoryLabel[p.category]}</span>}{p.brand && <span className="badge outline">{p.brand}</span>}
                     <SoftBadge color={projectStatusColor[p.status]}>{projectStatusLabel[p.status]}</SoftBadge>
                     <span className="badge outline">
                       <CalendarDays /> até {shortDate(p.dueDate)}
@@ -124,7 +126,7 @@ export default function Projects() {
         )}
       </Async>
 
-      {creating && <NewProjectModal onClose={() => setCreating(false)} />}
+      {creating && <ProjectEditor onClose={() => setCreating(false)} />}
     </div>
   );
 }
@@ -136,28 +138,35 @@ function filter(list: Project[], status: ProjectStatus | 'all', search: string) 
 const COLORS = ['#22d3ee', '#a78bfa', '#38bdf8', '#fbbf24', '#34d399', '#fb923c', '#f472b6'];
 const ICONS: Project['icon'][] = ['smartphone', 'play', 'globe', 'palette', 'shield', 'server'];
 
-function NewProjectModal({ onClose }: { onClose: () => void }) {
+export function ProjectEditor({ project, onClose }: { project?: Project; onClose: () => void }) {
   const { members, me, can } = useSession();
   const toast = useToast();
   const [form, setForm] = useState({
-    name: '',
-    subtitle: '',
-    description: '',
-    icon: 'shield' as Project['icon'],
-    color: COLORS[0],
-    dueDate: '',
-    ownerIds: me ? [me.id] : [],
+    category: project?.category ?? '' as Category | '',
+    brand: project?.brand ?? '',
+    name: project?.name ?? '',
+    subtitle: project?.subtitle ?? '',
+    description: project?.description ?? '',
+    icon: project?.icon ?? 'shield' as Project['icon'],
+    color: project?.color ?? COLORS[0],
+    dueDate: project?.dueDate ?? '',
+    ownerIds: project?.ownerIds ?? (me ? [me.id] : []),
+    status: project?.status ?? 'planejamento' as ProjectStatus,
+    milestones: project?.milestones ?? [],
   });
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    const invalid=document.getElementById('p-name')?.closest('[role=dialog]')?.querySelector<HTMLInputElement>('input:invalid');
+    if(invalid){invalid.reportValidity();setErr(invalid.validationMessage);return;}
     if (form.name.trim().length < 3) return setErr('Informe um nome com pelo menos 3 caracteres.');
     if (!form.dueDate) return setErr('Informe a data prevista de entrega.');
     setSaving(true);
     try {
-      await projectsService.create(form);
-      toast({ tone: 'success', title: 'Projeto criado', description: form.name });
+      if (project) await projectsService.update(project.id, {...form,category:form.category || null});
+      else await projectsService.create({...form,category:form.category || null});
+      toast({ tone: 'success', title: project ? 'Projeto atualizado' : 'Projeto criado', description: form.name });
       onClose();
     } catch (error) {
       setErr((error as Error).message);
@@ -170,13 +179,14 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="Novo projeto"
+      title={project ? 'Editar projeto' : 'Novo projeto'}
+      error={err}
       icon={<span className="icon-tile"><Layers /></span>}
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn primary" onClick={save} disabled={saving || !can('projetos.gerenciar')}>
-            {saving ? <span className="spinner" /> : <Save />} Criar projeto
+            {saving ? <span className="spinner" /> : <Save />} {project ? 'Salvar projeto' : 'Criar projeto'}
           </button>
         </>
       }
@@ -186,6 +196,8 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
           <label htmlFor="p-name">Nome *</label>
           <input id="p-name" className="input" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
+        <div className="field"><label htmlFor="p-category">Categoria do projeto</label><select id="p-category" className="select" value={form.category} onChange={e=>setForm({...form,category:e.target.value as Category | ''})}><option value="">Sem categoria</option>{Object.entries(categoryLabel).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select><small className="muted">Usada nos relatórios e sugerida nas novas tarefas.</small></div>
+        <div className="field"><label htmlFor="p-brand">Marca / cliente</label><input id="p-brand" className="input" maxLength={140} value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})} placeholder="Ex.: Firewalldo" /></div>
         <div className="field full">
           <label htmlFor="p-sub">Resumo</label>
           <input id="p-sub" className="input" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Ex.: Série de vídeos educativos" />
@@ -220,7 +232,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="field">
           <label htmlFor="p-due">Entrega prevista *</label>
-          <input id="p-due" type="date" className="input" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+          <FormDateInput id="p-due" value={form.dueDate} required onChange={dueDate => setForm({ ...form, dueDate })} />
         </div>
         <div className="field">
           <label htmlFor="p-own">Responsável principal</label>
@@ -228,7 +240,8 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
             {members.filter((m) => m.active).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </div>
-        {err && <div className="full small" style={{ color: 'var(--danger)' }}>{err}</div>}
+        <div className="field full"><label htmlFor="p-status">Status do projeto</label><select id="p-status" className="select" value={form.status} onChange={e=>setForm({...form,status:e.target.value as ProjectStatus})}>{Object.entries(projectStatusLabel).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></div>
+        <div className="field full"><span className="label">Etapas e marcos</span>{form.milestones.map((m,i)=><div className="milestone-editor" key={m.id}><input className="input" aria-label={`Título do marco ${i+1}`} value={m.title} onChange={e=>setForm({...form,milestones:form.milestones.map(x=>x.id===m.id?{...x,title:e.target.value}:x)})} /><div className="field"><FormDateInput id={`p-milestone-${m.id}`} aria-label={`Data do marco ${i+1}`} required value={m.dueDate} onChange={dueDate=>setForm({...form,milestones:form.milestones.map(x=>x.id===m.id?{...x,dueDate}:x)})} /></div><button className="btn" onClick={()=>setForm({...form,milestones:form.milestones.filter(x=>x.id!==m.id)})}>Remover</button></div>)}<button className="btn" onClick={()=>setForm({...form,milestones:[...form.milestones,{id:uid('m'),title:'',dueDate:form.dueDate,done:false}]})}><Plus /> Adicionar marco</button></div>
       </div>
     </Modal>
   );

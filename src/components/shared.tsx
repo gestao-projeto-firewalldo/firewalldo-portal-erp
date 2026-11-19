@@ -52,12 +52,13 @@ export function ProjectIcon({ project, size = 44 }: { project: Pick<Project, 'ic
 
 const coverIcons = { lock: Lock, router: Router, chip: Cpu, ai: Bot, code: Code2, eye: Eye, wifi: Wifi, bug: Bug };
 
-export function NewsCover({ item, className }: { item: Pick<NewsItem, 'cover' | 'category'>; className?: string }) {
+export function NewsCover({ item, className }: { item: Pick<NewsItem, 'cover' | 'category' | 'imageUrl'>; className?: string }) {
+  const [failedUrl,setFailedUrl]=useState('');
   const Icon = coverIcons[item.cover] ?? Lock;
   const cls = ['news-cover', ...(className ?? '').split(' ').filter((c) => c && c !== 'news-cover')].join(' ');
   return (
     <div className={cls} style={{ '--c': newsCategoryColor[item.category] } as CSSProperties} aria-hidden>
-      <Icon />
+      {item.imageUrl && failedUrl!==item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailedUrl(item.imageUrl!)} /> : <Icon />}
     </div>
   );
 }

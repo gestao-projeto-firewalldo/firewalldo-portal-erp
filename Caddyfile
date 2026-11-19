@@ -6,17 +6,21 @@
 :{$PORT:8080} {
 	root * /srv
 	encode zstd gzip
+	@worker path /sw.js /manifest.webmanifest
+	header @worker Cache-Control "no-cache"
 	header {
 		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
+		X-Frame-Options SAMEORIGIN
 		Referrer-Policy no-referrer
 	}
 	@api path /api /api/*
 	handle @api {
 		request_body {
-			max_size 512KB
+			max_size 8MB
 		}
-		reverse_proxy {$API_UPSTREAM:localhost:3333}
+		reverse_proxy {$API_UPSTREAM:localhost:3333} {
+			header_up X-Portal-Client-IP {http.request.header.X-Real-IP}
+		}
 	}
 	handle {
 		try_files {path} /index.html

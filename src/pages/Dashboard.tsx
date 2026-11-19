@@ -5,9 +5,10 @@ import { Async, Avatar, EmptyState, PriorityBadge, Progress, Skeleton, SkeletonL
 import { NewsCover, ProjectIcon, QuickIcon } from '@/components/shared';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
+import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
 import { newsService, notificationsService, settingsService, tasksService } from '@/services';
-import { categoryLabel, cx, daysUntil, relativeDay, shortDate } from '@/lib/labels';
+import { categoryLabel, cx, daysUntil, relativeDay, shortDate , ticketLabel } from '@/lib/labels';
 import type { AppNotification } from '@/types/models';
 import { projectProgress } from '@/lib/progress';
 
@@ -19,12 +20,13 @@ const notifIcon: Record<AppNotification['kind'], { icon: typeof Info; c: string 
 };
 
 export default function Dashboard() {
-  const { me, members, projects, projectsById, can } = useSession();
+  const { me, members, projects, projectsById, can, loading, error:sessionError } = useSession();
   const tasksQ = useQuery(() => tasksService.list());
   const newsQ = useQuery(() => newsService.list());
   const notifQ = useQuery(() => notificationsService.list());
   const shortcutsQ = useQuery(() => settingsService.shortcuts());
   const openTask = useTaskEditor();
+  const toast=useToast();
 
   const tasks = tasksQ.data ?? [];
   const online = members.filter((m) => m.active && m.status === 'online');
@@ -54,6 +56,7 @@ export default function Dashboard() {
         )}
       </div>
 
+      {(tasksQ.error || sessionError) && <p className="form-error" role="alert">Não foi possível atualizar os indicadores: {(tasksQ.error || sessionError)?.message} <button className="btn" onClick={tasksQ.refetch}>Tentar novamente</button></p>}
       {/* ---------- Indicadores ---------- */}
       <section className="stats">
         {stats.map((s) => (
@@ -63,7 +66,7 @@ export default function Dashboard() {
             </span>
             <div className="grow">
               <div className="stat-label">{s.label}</div>
-              {(s.ready ?? !!tasksQ.data) ? <div className="stat-value">{s.value}</div> : <Skeleton h={34} w={56} style={{ marginTop: 4 }} />}
+              {(tasksQ.error || sessionError) ? <div className="stat-value">—</div> : (s.ready ?? !!tasksQ.data) ? <div className="stat-value">{s.value}</div> : <Skeleton h={34} w={56} style={{ marginTop: 4 }} />}
             </div>
           </Link>
         ))}
@@ -88,7 +91,8 @@ export default function Dashboard() {
               </Link>
             ),
           )}
-          {!shortcutsQ.data && [0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} h={116} r={12} />)}
+          {shortcutsQ.error && <p className="form-error" role="alert">{shortcutsQ.error.message}</p>}
+          {!shortcutsQ.data && !shortcutsQ.error && [0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} h={116} r={12} />)}
         </div>
       </section>
 
@@ -101,7 +105,7 @@ export default function Dashboard() {
               Ver todos <ArrowRight size={16} />
             </Link>
           </div>
-          {projects.length === 0 ? (
+          {loading ? (
             <SkeletonList rows={3} h={60} />
           ) : running.length === 0 ? (
             <EmptyState title="Nenhum projeto em andamento" />
@@ -161,7 +165,7 @@ export default function Dashboard() {
                           <ic.icon />
                         </span>
                         <div className="grow">
-                          <div className="row" style={{ alignItems: 'baseline' }}>
+                          <div className="row notif-title-row">
                             <b className="grow ellipsis">{n.title}</b>
                             <span className="muted small" style={{ flex: 'none' }}>{n.createdAt}</span>
                           </div>
@@ -192,18 +196,18 @@ export default function Dashboard() {
                 {mine.map((t) => {
                   const late = t.dueDate && daysUntil(t.dueDate) < 0;
                   return (
-                    <div key={t.id} className="list-row" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => openTask({ task: t })} onKeyDown={(e) => e.key === 'Enter' && openTask({ task: t })}>
+                    <div key={t.id} className="list-row dashboard-task" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => openTask({ task: t })} onKeyDown={(e) => e.key === 'Enter' && openTask({ task: t })}>
                       <label className="check" onClick={(e) => e.stopPropagation()} title="Marcar como concluída">
-                        <input type="checkbox" onChange={() => tasksService.move(t.id, 'concluido', null)} />
+                        <input type="checkbox" onChange={async () => {try{await tasksService.move(t.id,'concluido',null);}catch(error){toast({tone:'error',title:'Não foi possível concluir',description:(error as Error).message});}}} />
                       </label>
                       <div className="grow">
-                        <div className="ellipsis" style={{ fontWeight: 600 }}>{t.title}</div>
+                        <div className="ellipsis" style={{ fontWeight: 600 }}>{ticketLabel(t)} {t.title}</div>
                         <div className="muted small ellipsis">
                           {t.projectId ? projectsById[t.projectId]?.name : 'Geral'} · {categoryLabel[t.category]}
                         </div>
                       </div>
                       <PriorityBadge p={t.priority} />
-                      <span className={cx('small', late ? 'late' : 'muted')} style={{ width: 52, textAlign: 'right' }}>{shortDate(t.dueDate)}</span>
+                      <span className={cx('small task-date', late ? 'late' : 'muted')} style={{ width: 52, textAlign: 'right' }}>{shortDate(t.dueDate)}</span>
                     </div>
                   );
                 })}

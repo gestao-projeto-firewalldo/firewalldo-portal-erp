@@ -11,7 +11,7 @@ export type ISODate = string; // ex.: "2026-11-20"
 /* ---------------- Usuários ---------------- */
 
 /** Perfis de acesso. "usuario" = colaborador comum. */
-export type Role = 'admin' | 'usuario';
+export type Role = 'superadmin' | 'admin' | 'usuario';
 /** Presença (o Back-end define a regra de online/offline). */
 export type PresenceStatus = 'online' | 'offline';
 
@@ -32,7 +32,7 @@ export interface Member {
   pendingInvite?: boolean;
 }
 
-export type MemberInput = Pick<Member, 'name' | 'email' | 'role' | 'title'>;
+export type MemberInput = Pick<Member, 'name' | 'email' | 'role' | 'title'> & { senha: string; bio?: string; areas?: Category[] };
 
 /* ---------------- Tarefas ---------------- */
 
@@ -55,6 +55,9 @@ export interface ChecklistItem {
 }
 
 export interface Task {
+  ticketNumber?: number;
+  scheduleId?: ID | null;
+  scheduledFor?: string | null;
   id: ID;
   title: string;
   description: string;
@@ -75,7 +78,7 @@ export interface Task {
   order: number;
 }
 
-export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy'>;
+export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy' | 'scheduleId' | 'scheduledFor' | 'ticketNumber'>;
 
 /* ---------------- Projetos ---------------- */
 
@@ -89,6 +92,8 @@ export interface Milestone {
 }
 
 export interface Project {
+  category?: Category | null;
+  brand?: string;
   id: ID;
   name: string;
   subtitle: string;
@@ -134,6 +139,12 @@ export interface LibraryFile {
 export type NewsCategory = 'ciberseguranca' | 'redes' | 'informatica' | 'programacao' | 'ia' | 'privacidade';
 
 export interface NewsItem {
+  publicationStatus?: 'draft' | 'published';
+  importedAt?: string | null;
+  references?: {url: string; title: string}[];
+  imageCredit?: string;
+  imageSourceUrl?: string;
+  imageIllustrative?: boolean;
   id: ID;
   title: string;
   summary: string;
@@ -223,6 +234,37 @@ export type Permission =
   | 'projetos.gerenciar'
   | 'biblioteca.enviar'
   | 'usuarios.gerenciar'
+  | 'administradores.gerenciar'
+  | 'auditoria.ver'
   | 'noticias.curar'
   | 'relatorios.ver'
   | 'configuracoes.integracoes';
+
+/* ---------------- Agenda de tarefas ---------------- */
+export type ScheduleKind = 'recurring' | 'weekly' | 'scheduled';
+export interface ScheduleInput {
+  title: string;
+  description: string;
+  projectId: ID | null;
+  category: Category;
+  priority: Priority;
+  assigneeIds: ID[];
+  kind: ScheduleKind;
+  intervalDays: number;
+  startDate: ISODate;
+  endDate: ISODate | null;
+  openingTime: string;
+  weekdays: number[];
+  dates: ISODate[];
+  deadlineDays: number;
+  checklist: ChecklistItem[];
+}
+export interface TaskSchedule extends ScheduleInput {
+  id: ID;
+  active: boolean;
+  nextRunAt: string | null;
+  upcoming: string[];
+  createdBy: ID;
+  createdAt: string;
+  updatedAt: string;
+}

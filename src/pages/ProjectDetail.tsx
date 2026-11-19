@@ -1,13 +1,15 @@
-import { type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Check, Flag, ListChecks, Plus, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, Flag, ListChecks, Plus, Users, Pencil } from 'lucide-react';
 import { Async, Avatar, AvatarStack, EmptyState, PriorityBadge, Progress, Skeleton } from '@/components/ui';
 import { ProjectIcon } from '@/components/shared';
+import { ProjectEditor } from '@/pages/Projects';
+import { useToast } from '@/context/ToastContext';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
 import { useQuery } from '@/hooks/useQuery';
 import { projectsService, tasksService } from '@/services';
-import { cx, longDate, projectStatusLabel, shortDate, statusColor, statusLabel, statusOrder } from '@/lib/labels';
+import { categoryLabel, cx, longDate, projectStatusLabel, shortDate, statusColor, statusLabel, statusOrder , ticketLabel } from '@/lib/labels';
 import { projectProgress } from '@/lib/progress';
 
 export default function ProjectDetail() {
@@ -16,6 +18,8 @@ export default function ProjectDetail() {
   const tasksQ = useQuery(() => tasksService.list());
   const { membersById, can } = useSession();
   const openTask = useTaskEditor();
+  const [editing,setEditing] = useState(false);
+  const toast = useToast();
 
   return (
     <div className="page">
@@ -29,18 +33,21 @@ export default function ProjectDetail() {
           const pct = projectProgress(p, tasksQ.data);
           return (
             <>
+              {editing && <ProjectEditor project={p} onClose={()=>setEditing(false)} />}
               <section className="card project-head">
                 <ProjectIcon project={p} size={72} />
                 <div className="grow" style={{ minWidth: 220 }}>
                   <h1>{p.name}</h1>
                   <p className="muted">{p.subtitle}</p>
                   <div className="row" style={{ marginTop: 12, gap: 18, flexWrap: 'wrap' }}>
+                    {p.category && <span className="badge outline">{categoryLabel[p.category]}</span>}{p.brand && <span className="badge outline">{p.brand}</span>}
                     <span className="badge status-blue">{projectStatusLabel[p.status]}</span>
                     <span>
                       {done} de {linked.length} tarefas concluídas
                     </span>
                   </div>
                 </div>
+                {can('projetos.gerenciar') && <button className="btn" onClick={()=>setEditing(true)}><Pencil /> Editar projeto</button>}
                 <div className="project-pct">
                   <b>{pct}%</b>
                   <div className="grow">
@@ -76,7 +83,7 @@ export default function ProjectDetail() {
                             </h3>
                             {items.map((t) => (
                               <div key={t.id} className="linked-row" role="button" tabIndex={0} onClick={() => openTask({ task: t })} onKeyDown={(e) => e.key === 'Enter' && openTask({ task: t })}>
-                                <span className="grow lr-title">{t.title}</span>
+                                <span className="grow lr-title">{ticketLabel(t)} {t.title}</span>
                                 <span className="lr-meta">
                                   {s === 'backlog' ? (
                                     t.assigneeIds.length ? (
@@ -138,7 +145,7 @@ export default function ProjectDetail() {
                           <button
                             className="ms-dot"
                             disabled={!can('projetos.gerenciar')}
-                            onClick={() => projectsService.toggleMilestone(p.id, m.id).then(() => q.refetch())}
+                            onClick={() => projectsService.toggleMilestone(p.id, m.id).then(() => q.refetch()).catch(error=>toast({tone:'error',title:'Não foi possível salvar o marco',description:error.message}))}
                             aria-label={m.done ? 'Marcar como pendente' : 'Marcar como concluído'}
                           >
                             <Check size={14} strokeWidth={3} />

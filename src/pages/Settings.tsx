@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Bug, Check, KeyRound, Pencil, Plus, RotateCcw, Save } from 'lucide-react';
 import { Avatar, Modal, Skeleton } from '@/components/ui';
+import { PushSettings } from '@/components/notifications/PushSettings';
+import { RadarSettings } from '@/components/radar/RadarSettings';
+import { MemberEditor } from '@/components/users/MemberEditor';
 import { QuickIcon } from '@/components/shared';
 import { usePrefs } from '@/context/PrefsContext';
 import { rolePermissions, useSession } from '@/context/SessionContext';
@@ -26,7 +29,9 @@ const permLabels: Record<Permission, string> = {
   'tarefas.aceitar': 'Aceitar vagas no Backlog',
   'projetos.gerenciar': 'Gerenciar projetos e marcos',
   'biblioteca.enviar': 'Enviar arquivos',
-  'usuarios.gerenciar': 'Criar usuários e alterar perfis',
+  'usuarios.gerenciar': 'Criar e editar usuários comuns e suas senhas',
+  'administradores.gerenciar': 'Gerenciar administradores e suas senhas',
+  'auditoria.ver': 'Consultar auditoria',
   'noticias.curar': 'Curar notícias do Radar',
   'relatorios.ver': 'Ver relatórios',
   'configuracoes.integracoes': 'Editar fontes do radar e atalhos',
@@ -39,6 +44,7 @@ export default function SettingsPage() {
   const { prefs, setPrefs } = usePrefs();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
+  const [editingProfile, setEditingProfile] = useState(params.get('perfil') === 'editar');
   const [tab, setTab] = useState<Tab>(() => (params.get('aba') as Tab) || 'geral');
   const sourcesQ = useQuery(() => settingsService.radarSources());
   const shortcutsQ = useQuery(() => settingsService.shortcuts());
@@ -50,13 +56,15 @@ export default function SettingsPage() {
   const [shortcuts, setShortcuts] = useState<Shortcut[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editingSource,setEditingSource]=useState<RadarSource|null>(null);
   const [forceError, setForceError] = useState(devFlags.forceError);
   const viewAs = useApi() ? me?.role : mockDb.get().viewAsRole;
   const canIntegr = can('configuracoes.integracoes');
 
+  useEffect(() => { setPrefsDraft(prefs); }, [prefs]);
   useEffect(() => {
     if (me) setProfile({ name: me.name, title: me.title, bio: me.bio ?? '' });
-  }, [me]);
+  }, [me?.id, me?.name, me?.title, me?.bio]);
   useEffect(() => {
     if (sourcesQ.data && sources === null) setSources(sourcesQ.data);
   }, [sourcesQ.data, sources]);
@@ -93,7 +101,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       if (me && !same(profile, { name: me.name, title: me.title, bio: me.bio ?? '' })) await membersService.update(me.id, profile);
-      setPrefs(prefsDraft);
+      if (!same(prefsDraft, prefs)) await setPrefs(prefsDraft);
       if (sources && canIntegr && !same(sources, sourcesQ.data)) await settingsService.saveRadarSources(sources);
       if (shortcuts && canIntegr && !same(shortcuts, shortcutsQ.data)) await settingsService.saveShortcuts(shortcuts);
       toast({ tone: 'success', title: 'Alterações salvas' });
@@ -108,7 +116,7 @@ export default function SettingsPage() {
     setPrefsDraft({ ...prefsDraft, notifications: { ...prefsDraft.notifications, [k]: v } });
 
   return (
-    <div className="page">
+    <div className="page settings-page">
       <div className="page-head" style={{ marginBottom: 8 }}>
         <h1>Configurações</h1>
         <div className="actions">
@@ -138,6 +146,7 @@ export default function SettingsPage() {
                 <h2>Perfil</h2>
                 <p>Informações exibidas para a equipe.</p>
               </div>
+              <button className="btn" onClick={() => setEditingProfile(true)}><Pencil /> Editar perfil e senha</button>
             </div>
             <div className="row" style={{ gap: 18, marginBottom: 18 }}>
               {me && <Avatar member={me} size={72} />}
@@ -166,7 +175,7 @@ export default function SettingsPage() {
             <div className="section-head">
               <div>
                 <h2>Aparência</h2>
-                <p>Tema da interface e animações.</p>
+                <p>O tema é aplicado e salvo ao selecionar. Seguir o sistema acompanha a aparência do dispositivo.</p>
               </div>
             </div>
             <div className="theme-opts">
@@ -175,7 +184,7 @@ export default function SettingsPage() {
                 { v: 'light', l: 'Claro', bg: '#f4f6fa' },
                 { v: 'system', l: 'Seguir o sistema', bg: 'linear-gradient(135deg,#0b1426 50%,#f4f6fa 50%)' },
               ] as const).map((t) => (
-                <button key={t.v} className={cx('theme-opt', prefsDraft.theme === t.v && 'active')} onClick={() => setPrefsDraft({ ...prefsDraft, theme: t.v })}>
+                <button key={t.v} className={cx('theme-opt', prefsDraft.theme === t.v && 'active')} onClick={async () => { try { await setPrefs({ ...prefsDraft, theme: t.v }); } catch (error) { toast({ tone: 'error', title: 'Não foi possível salvar o tema', description: (error as Error).message }); } }}>
                   <div className="sw" style={{ background: t.bg }} />
                   {t.l}
                 </button>
@@ -194,7 +203,7 @@ export default function SettingsPage() {
             <div className="section-head">
               <div>
                 <h2>Permissões</h2>
-                <p>Visualização das regras de cada perfil. As regras reais são aplicadas pelo Back-end.</p>
+                <p>Permissões de cada perfil no portal.</p>
               </div>
             </div>
             {!useApi() && <div className="notice" style={{ marginBottom: 16 }}>
@@ -202,7 +211,7 @@ export default function SettingsPage() {
               <div className="grow">
                 <b>Visualizar o portal como:</b> alterne o perfil para testar o que cada um vê (só demonstração).
                 <div className="seg" style={{ marginTop: 10, display: 'flex', width: 'fit-content' }}>
-                  {(['admin', 'usuario'] as const).map((r) => (
+                  {(['superadmin', 'admin', 'usuario'] as const).map((r) => (
                     <button
                       key={r}
                       className={cx(viewAs === r && 'active')}
@@ -222,6 +231,7 @@ export default function SettingsPage() {
                 <thead>
                   <tr>
                     <th>Permissão</th>
+                    <th>Administrador geral</th>
                     <th>Administrador</th>
                     <th>Usuário</th>
                   </tr>
@@ -230,7 +240,7 @@ export default function SettingsPage() {
                   {(Object.keys(permLabels) as Permission[]).map((p) => (
                     <tr key={p}>
                       <td>{permLabels[p]}</td>
-                      {(['admin', 'usuario'] as const).map((r) => (
+                      {(['superadmin', 'admin', 'usuario'] as const).map((r) => (
                         <td key={r}>{rolePermissions[r].includes(p) ? <Check size={18} style={{ color: 'var(--success)' }} /> : <span className="muted">—</span>}</td>
                       ))}
                     </tr>
@@ -298,7 +308,7 @@ export default function SettingsPage() {
             <div className="section-head">
               <div>
                 <h2>Fontes do radar</h2>
-                <p>Defina as fontes de notícias que alimentam o Radar de notícias da equipe.</p>
+                <p>Os sites das fontes ativas delimitam a pesquisa automática e ficam disponíveis para publicação manual.</p>
               </div>
               {canIntegr && (
                 <button className="btn outline-primary" onClick={() => setAdding(true)}>
@@ -313,21 +323,24 @@ export default function SettingsPage() {
                 {sources.map((s) => (
                   <div key={s.id} className="source-row">
                     <span className="source-logo">{s.short}</span>
-                    <div className="grow">
+                    <div className="grow source-info">
                       <b>{s.name}</b>
-                      <div className="muted">{s.description}</div>
+                      <div className="muted">{s.description}</div><a className="small" href={s.url} target="_blank" rel="noreferrer">{s.url}</a>
                     </div>
+                    <div className="source-controls">
+                    <button className="btn icon source-edit" disabled={!canIntegr} aria-label={`Editar fonte ${s.name}`} onClick={()=>setEditingSource(s)}><Pencil /></button>
                     <span className={cx('state-pill', s.active ? 'on' : 'off')}>
                       <i /> {s.active ? 'Ativa' : 'Pausada'}
                     </span>
                     <input
                       type="checkbox"
-                      className="switch lg"
+                      className="switch lg source-toggle"
                       checked={s.active}
                       disabled={!canIntegr}
                       onChange={(e) => setSources(sources.map((x) => (x.id === s.id ? { ...x, active: e.target.checked } : x)))}
                       aria-label={`${s.active ? 'Pausar' : 'Ativar'} ${s.name}`}
                     />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -337,6 +350,7 @@ export default function SettingsPage() {
             </p>
           </section>
 
+          <RadarSettings disabled={!canIntegr} />
           <section className="card settings-section">
             <div className="section-head">
               <div>
@@ -353,7 +367,10 @@ export default function SettingsPage() {
                     key={s.id}
                     item={s}
                     disabled={!canIntegr}
-                    onChange={(url) => setShortcuts(shortcuts.map((x) => (x.id === s.id ? { ...x, url } : x)))}
+                    onSave={async (url) => {
+                      const item = await settingsService.saveShortcut(s.id, url);
+                      setShortcuts(current => current?.map(x => x.id === item.id ? item : x) ?? null);
+                    }}
                   />
                 ))}
               </div>
@@ -364,31 +381,35 @@ export default function SettingsPage() {
 
       {/* ===================== NOTIFICAÇÕES ===================== */}
       {tab === 'notificacoes' && (
+        <div className="settings-stack"><PushSettings/>
         <section className="card settings-section">
           <div className="section-head">
             <div>
               <h2>Notificações</h2>
-              <p>Preferências pessoais. O envio real (push e e-mail) depende do Back-end.</p>
+              <p>Preferências salvas na sua conta. As notificações são exibidas no sino do portal.</p>
             </div>
           </div>
           {([
-            ['taskAssigned', 'Tarefa atribuída a mim', 'Quando alguém me adicionar como responsável.'],
+            ['taskAssigned', 'Tarefas e vagas disponíveis', 'Quando alguém me adicionar como responsável ou criar uma tarefa aberta para a equipe.'],
             ['taskDue', 'Prazos próximos', 'Lembrete 2 dias antes do vencimento.'],
             ['projectUpdates', 'Atualizações de projetos', 'Marcos concluídos e mudanças de status.'],
             ['newsDigest', 'Resumo do Radar', 'Destaques de notícias uma vez por dia.'],
-            ['email', 'Também por e-mail', 'Requer conta autenticada.'],
+            ['email', 'Também por e-mail', 'Indisponível: o serviço de e-mail ainda não foi configurado.'],
           ] as const).map(([k, t, d]) => (
             <div key={k} className="pref-row">
               <div className="grow">
                 <b>{t}</b>
                 <span className="muted small">{d}</span>
               </div>
-              <input type="checkbox" className="switch lg" checked={prefsDraft.notifications[k]} onChange={(e) => setN(k, e.target.checked)} aria-label={t} />
+              <input type="checkbox" className="switch lg" disabled={useApi() && k === 'email'} checked={prefsDraft.notifications[k]} onChange={(e) => setN(k, e.target.checked)} aria-label={t} />
             </div>
           ))}
-        </section>
+        </section></div>
       )}
 
+      {editingProfile && me && <MemberEditor member={me} onClose={() => { setEditingProfile(false); params.delete('perfil'); setParams(params, { replace: true }); }} />}
+
+      {editingSource && sources && <AddSourceModal source={editingSource} onClose={()=>setEditingSource(null)} onAdd={source=>{setSources(sources.map(s=>s.id===source.id?source:s));setEditingSource(null);toast({tone:'info',title:'Fonte alterada',description:'Clique em Salvar alterações para confirmar.'});}} />}
       {adding && sources && (
         <AddSourceModal
           onClose={() => setAdding(false)}
@@ -403,55 +424,58 @@ export default function SettingsPage() {
   );
 }
 
-function ShortcutRow({ item, disabled, onChange }: { item: Shortcut; disabled: boolean; onChange: (url: string) => void }) {
+function ShortcutRow({ item, disabled, onSave }: { item: Shortcut; disabled: boolean; onSave: (url: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
-  return (
-    <div className="shortcut-row">
-      <span className="sc-icon">
-        <QuickIcon name={item.icon} />
-      </span>
-      <b className="sc-label">{item.label}</b>
-      <input
-        className="input"
-        value={item.url}
-        readOnly={!editing}
-        placeholder="Link não configurado"
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && setEditing(false)}
-        aria-label={`Link de ${item.label}`}
-        ref={(el) => {
-          if (el && editing) el.focus();
-        }}
-      />
-      <button className={cx('btn icon', editing && 'primary')} disabled={disabled} onClick={() => setEditing(!editing)} aria-label={editing ? 'Concluir edição' : `Editar ${item.label}`}>
-        {editing ? <Check /> : <Pencil />}
-      </button>
-    </div>
-  );
+  const [draft, setDraft] = useState(item.url);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => { if (!editing) setDraft(item.url); }, [item.url, editing]);
+  const save = async () => {
+    let url = draft.trim();
+    if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+    if (url) {
+      try { const parsed = new URL(url); if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) throw new Error(); }
+      catch { setError('Informe um endereço válido, como https://exemplo.com.'); return; }
+    }
+    setSaving(true); setError('');
+    try { await onSave(url); setDraft(url); setEditing(false); toast({ tone:'success', title:'Atalho salvo', description:item.label }); }
+    catch (err) { setError((err as Error).message); }
+    finally { setSaving(false); }
+  };
+  return <div className="shortcut-row">
+    <span className="sc-icon"><QuickIcon name={item.icon} /></span><b className="sc-label">{item.label}</b>
+    <input ref={inputRef} className="input" value={draft} readOnly={!editing} placeholder="Link não configurado" onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && editing) void save(); }} aria-label={`Link de ${item.label}`} />
+    <div className="shortcut-actions">{editing ? <><button className="btn primary" disabled={saving} onClick={() => void save()} aria-label={`Salvar ${item.label}`}>{saving ? 'Salvando…' : 'Salvar'}</button><button className="btn" disabled={saving} onClick={() => { setDraft(item.url); setEditing(false);setError(''); }}>Cancelar</button></> : <button className="btn icon" disabled={disabled} onClick={() => setEditing(true)} aria-label={`Editar ${item.label}`}><Pencil /></button>}</div>
+    {error && <p className="form-error" style={{flexBasis:'100%'}} role="alert">{error}</p>}
+  </div>;
 }
 
-function AddSourceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: RadarSource) => void }) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [description, setDescription] = useState('');
+function AddSourceModal({ source, onClose, onAdd }: { source?:RadarSource; onClose: () => void; onAdd: (s: RadarSource) => void }) {
+  const [name, setName] = useState(source?.name ?? '');
+  const [url, setUrl] = useState(source?.url ?? '');
+  const [description, setDescription] = useState(source?.description ?? '');
   const [err, setErr] = useState('');
   const submit = () => {
     if (name.trim().length < 2) return setErr('Informe o nome da fonte.');
-    if (!/^https?:\/\//i.test(url.trim())) return setErr('Informe o endereço (RSS ou site) começando com https://');
+    if (!/^https?:\/\//i.test(url.trim())) return setErr('Informe o site da fonte começando com https://');
     const short = name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
-    onAdd({ id: uid('src'), name: name.trim(), url: url.trim(), description: description.trim(), short, active: true });
+    onAdd({ id: source?.id ?? uid('src'), name: name.trim(), url: url.trim(), description: description.trim(), short, active: source?.active ?? true });
   };
   return (
     <Modal
       open
       onClose={onClose}
-      title="Adicionar fonte"
-      subtitle="A fonte fica disponível para publicações no Radar."
+      title={source ? "Editar fonte" : "Adicionar fonte"}
+      error={err}
+      subtitle="Informe o site da fonte. A pesquisa automática é limitada ao domínio e aos subdomínios desse endereço."
       width={540}
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn primary" onClick={submit}><Plus /> Adicionar</button>
+          <button className="btn primary" onClick={submit}><Plus /> {source ? 'Concluir edição' : 'Adicionar'}</button>
         </>
       }
     >
@@ -461,7 +485,7 @@ function AddSourceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (s: Ra
           <input id="s-n" className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field full">
-          <label htmlFor="s-u">Endereço (feed RSS ou site) *</label>
+          <label htmlFor="s-u">Site da fonte *</label>
           <input id="s-u" className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" />
         </div>
         <div className="field full">

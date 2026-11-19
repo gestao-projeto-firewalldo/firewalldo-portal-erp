@@ -4,7 +4,7 @@
  * Cada método tem dois caminhos:
  *   - `useApi()` verdadeiro  → chama a API real via `http` (rota indicada no TODO(api)).
  *   - caso contrário         → usa o estado simulado (`mockDb`) com latência artificial.
- * Para integrar o Back-end: definir VITE_DATA_SOURCE=api e implementar as rotas abaixo.
+ * O Dockerfile define VITE_DATA_SOURCE=api para usar os endpoints reais.
  * As regras de negócio aplicadas aqui no mock (ex.: limite de vagas) devem ser
  * replicadas/validadas no servidor — o front não é fonte de verdade.
  */
@@ -37,7 +37,7 @@ const initialsOf = (name: string) =>
 /* ================= Sessão ================= */
 
 export const authService = {
-  /** Usuário logado. TODO(api): GET /auth/me */
+  /** Usuário logado. API: GET /auth/me */
   async me(): Promise<Member> {
     if (useApi()) return http.get('/auth/me');
     return simulate(() => {
@@ -59,19 +59,20 @@ export const authService = {
 const PALETTE = ['#2563eb', '#8b5cf6', '#16a34a', '#d97706', '#db2777', '#0d9488', '#e11d48', '#0891b2'];
 
 export const membersService = {
-  /** TODO(api): GET /users */
+  /** API: GET /users */
   async list(): Promise<Member[]> {
     if (useApi()) return http.get('/users');
     return simulate(() => db().members);
   },
-  /** TODO(api): POST /users  (Back-end envia convite/define senha) */
+  /** API: POST /users  (Back-end envia convite/define senha) */
   async create(input: MemberInput): Promise<Member & { inviteToken?: string }> {
     if (useApi()) return http.post('/users', input);
     const s = db();
     if (s.members.some((m) => m.email.toLowerCase() === input.email.toLowerCase()))
       throw new ServiceError('Já existe um usuário com este e-mail.', 'CONFLICT');
+    const { senha: _password, ...profile } = input;
     const m: Member = {
-      ...input,
+      ...profile,
       id: uid('u'),
       initials: initialsOf(input.name),
       areas: [],
@@ -84,13 +85,14 @@ export const membersService = {
     });
     return simulate(() => m);
   },
-  /** TODO(api): PATCH /users/:id */
-  async update(id: string, patch: Partial<Pick<Member, 'name' | 'title' | 'bio' | 'role' | 'active' | 'areas'>>): Promise<Member> {
+  /** API: PATCH /users/:id */
+  async update(id: string, patch: Partial<Pick<Member, 'name' | 'email' | 'title' | 'bio' | 'role' | 'active' | 'areas'>> & { senha?: string; confirmacaoSenha?: string; senhaAtual?: string }): Promise<Member> {
     if (useApi()) return http.patch(`/users/${id}`, patch);
     mockDb.update((d) => {
       const m = d.members.find((x) => x.id === id);
       if (!m) return;
-      Object.assign(m, patch);
+      const { senha: _password, confirmacaoSenha: _confirmation, senhaAtual: _current, ...profile } = patch;
+      Object.assign(m, profile);
       if (patch.name) m.initials = initialsOf(patch.name);
     });
     return simulate(() => db().members.find((x) => x.id === id)!);
@@ -100,12 +102,17 @@ export const membersService = {
 /* ================= Projetos ================= */
 
 export const projectsService = {
-  /** TODO(api): GET /projects */
+  async update(id: string, patch: Partial<Omit<Project,'id'|'startDate'|'progress'>>): Promise<Project> {
+    if (useApi()) return http.patch(`/projects/${id}`,patch);
+    mockDb.update(d=>{const item=d.projects.find(p=>p.id===id);if(item)Object.assign(item,patch);});
+    return this.get(id);
+  },
+  /** API: GET /projects */
   async list(): Promise<Project[]> {
     if (useApi()) return http.get('/projects');
     return simulate(() => db().projects);
   },
-  /** TODO(api): GET /projects/:id */
+  /** API: GET /projects/:id */
   async get(id: string): Promise<Project> {
     if (useApi()) return http.get(`/projects/${id}`);
     return simulate(() => {
@@ -114,7 +121,7 @@ export const projectsService = {
       return p;
     });
   },
-  /** TODO(api): PATCH /projects/:id/milestones/:milestoneId  { done } */
+  /** API: PATCH /projects/:id/milestones/:milestoneId  { done } */
   async toggleMilestone(projectId: string, milestoneId: string): Promise<Project> {
     if (useApi()) return http.patch(`/projects/${projectId}/milestones/${milestoneId}`, {});
     mockDb.update((d) => {
@@ -123,10 +130,10 @@ export const projectsService = {
     });
     return this.get(projectId);
   },
-  /** TODO(api): POST /projects */
-  async create(input: Pick<Project, 'name' | 'subtitle' | 'description' | 'icon' | 'color' | 'dueDate' | 'ownerIds'>): Promise<Project> {
+  /** API: POST /projects */
+  async create(input: Pick<Project, 'name' | 'subtitle' | 'description' | 'icon' | 'color' | 'dueDate' | 'ownerIds'> & Pick<Project,'category'|'brand'> & Partial<Pick<Project,'status'|'milestones'>>): Promise<Project> {
     if (useApi()) return http.post('/projects', input);
-    const project: Project = { ...input, id: uid('p'), status: 'planejamento', milestones: [], startDate: today(), progress: 0 };
+    const project: Project = { ...input, id: uid('p'), status: input.status ?? 'planejamento', milestones: input.milestones ?? [], startDate: today(), progress: 0 };
     mockDb.update((d) => {
       d.projects.push(project);
     });
@@ -137,12 +144,12 @@ export const projectsService = {
 /* ================= Tarefas ================= */
 
 export const tasksService = {
-  /** TODO(api): GET /tasks   (filtros opcionais: ?projectId=&assigneeId=&status=) */
+  /** API: GET /tasks   (filtros opcionais: ?projectId=&assigneeId=&status=) */
   async list(): Promise<Task[]> {
     if (useApi()) return http.get('/tasks');
     return simulate(() => [...db().tasks].sort((a, b) => a.order - b.order));
   },
-  /** Criar tarefa (admin, dentro de um projeto). TODO(api): POST /tasks */
+  /** Criar tarefa (admin, dentro de um projeto). API: POST /tasks */
   async create(input: TaskInput): Promise<Task> {
     if (useApi()) return http.post('/tasks', input);
     const s = db();
@@ -159,7 +166,7 @@ export const tasksService = {
     });
     return simulate(() => task);
   },
-  /** TODO(api): PATCH /tasks/:id */
+  /** API: PATCH /tasks/:id */
   async update(id: string, patch: Partial<Task>): Promise<Task> {
     if (useApi()) return http.patch(`/tasks/${id}`, patch);
     mockDb.update((d) => {
@@ -168,7 +175,7 @@ export const tasksService = {
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },
-  /** Muda coluna/ordem (arrastar no Kanban). TODO(api): PATCH /tasks/:id/move  { status, beforeId } */
+  /** Muda coluna/ordem (arrastar no Kanban). API: PATCH /tasks/:id/move  { status, beforeId } */
   async move(id: string, status: TaskStatus, beforeId: string | null): Promise<void> {
     if (useApi()) return http.patch(`/tasks/${id}/move`, { status, beforeId });
     mockDb.update((d) => {
@@ -184,7 +191,7 @@ export const tasksService = {
     return simulate(() => undefined);
   },
   /**
-   * Usuário logado aceita uma vaga. TODO(api): POST /tasks/:id/accept
+   * Usuário logado aceita uma vaga. API: POST /tasks/:id/accept
    * Regras: tarefa precisa estar aberta e com vaga (assigneeIds.length < maxAssignees).
    * Ao lotar, a tarefa fecha (open=false) e sai do Backlog para "A fazer".
    */
@@ -204,7 +211,7 @@ export const tasksService = {
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },
-  /** Desistir de uma vaga. TODO(api): POST /tasks/:id/leave */
+  /** Desistir de uma vaga. API: POST /tasks/:id/leave */
   async leave(id: string): Promise<Task> {
     if (useApi()) return http.post(`/tasks/${id}/leave`, {});
     mockDb.update((d) => {
@@ -214,11 +221,11 @@ export const tasksService = {
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },
-  /** TODO(api): PUT /tasks/:id/checklist */
+  /** API: PUT /tasks/:id/checklist */
   async setChecklist(id: string, checklist: ChecklistItem[]): Promise<Task> {
     return this.update(id, { checklist });
   },
-  /** TODO(api): DELETE /tasks/:id */
+  /** API: DELETE /tasks/:id */
   async remove(id: string): Promise<void> {
     if (useApi()) return http.del(`/tasks/${id}`);
     mockDb.update((d) => {
@@ -231,18 +238,26 @@ export const tasksService = {
 /* ================= Biblioteca (fora do menu) ================= */
 
 export const libraryService = {
-  /** TODO(api): GET /library/folders */
+  /** API: GET /library/folders */
   async folders(): Promise<LibraryFolder[]> {
     if (useApi()) return http.get('/library/folders');
     return simulate(() => db().folders);
   },
-  /** TODO(api): GET /library/files */
+  /** API: GET /library/files */
   async files(): Promise<LibraryFile[]> {
     if (useApi()) return http.get('/library/files');
     return simulate(() => db().files);
   },
-  /** V1: só registra localmente (sem upload). TODO(api): POST /library/files (multipart) → Google Drive */
+  /** API: POST /library/files, conteúdo persistido no PostgreSQL (até 5 MB). */
+  async remove(id: string): Promise<void> { return http.del(`/library/files/${id}`); },
   async addLocal(file: File, folderId: string): Promise<LibraryFile> {
+    if (useApi()) {
+      if (!file.size || file.size > 5 * 1024 * 1024) throw new ServiceError('Envie um arquivo de até 5 MB.','INVALID_INPUT');
+      const content = await new Promise<string>((resolve,reject) => {
+        const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Não foi possível ler o arquivo.'));reader.readAsDataURL(file);
+      });
+      return http.post('/library/files',{name:file.name,folderId,mediaType:file.type,content});
+    }
     const kind: LibraryFile['kind'] = file.type.startsWith('image/')
       ? 'image'
       : file.type.startsWith('video/')
@@ -273,17 +288,17 @@ export const libraryService = {
 /* ================= Radar de notícias ================= */
 
 export const newsService = {
-  /** V1: notícias de demonstração. TODO(api): GET /news (coleta das fontes ativas) */
-  async list(): Promise<NewsItem[]> {
-    if (useApi()) return http.get('/news');
+  /** API: GET /news, publicações de fontes ativas. */
+  async list(drafts = false): Promise<NewsItem[]> {
+    if (useApi()) return http.get(`/news${drafts ? '?drafts=true' : ''}`);
     return simulate(() => db().news);
   },
-  /** TODO(api): GET /news/saved  → string[] de ids */
+  /** API: GET /news/saved  → string[] de ids */
   async savedIds(): Promise<string[]> {
     if (useApi()) return http.get('/news/saved');
     return simulate(() => db().savedNewsIds);
   },
-  /** Alterna "salvar". TODO(api): POST /news/:id/save  → string[] atualizado */
+  /** Alterna "salvar". API: POST /news/:id/save  → string[] atualizado */
   async toggleSave(id: string): Promise<string[]> {
     if (useApi()) return http.post(`/news/${id}/save`, {});
     mockDb.update((d) => {
@@ -296,12 +311,12 @@ export const newsService = {
 /* ================= Ideias ================= */
 
 export const ideasService = {
-  /** TODO(api): GET /ideas  (votedByMe calculado para o usuário logado) */
+  /** API: GET /ideas  (votedByMe calculado para o usuário logado) */
   async list(): Promise<Idea[]> {
     if (useApi()) return http.get('/ideas');
     return simulate(() => db().ideas);
   },
-  /** TODO(api): POST /ideas */
+  /** API: POST /ideas */
   async create(input: IdeaInput): Promise<Idea> {
     if (useApi()) return http.post('/ideas', input);
     const idea: Idea = { ...input, id: uid('i'), status: 'nova', authorId: db().currentUserId, votes: 0, votedByMe: false, createdAt: today() };
@@ -310,7 +325,7 @@ export const ideasService = {
     });
     return simulate(() => idea);
   },
-  /** Admin muda status. TODO(api): PATCH /ideas/:id  { status } */
+  /** Admin muda status. API: PATCH /ideas/:id  { status } */
   async setStatus(id: string, status: IdeaStatus): Promise<void> {
     if (useApi()) return http.patch(`/ideas/${id}`, { status });
     mockDb.update((d) => {
@@ -319,7 +334,7 @@ export const ideasService = {
     });
     return simulate(() => undefined);
   },
-  /** "Gostei" (um por usuário). TODO(api): POST /ideas/:id/vote  (alternar) */
+  /** "Gostei" (um por usuário). API: POST /ideas/:id/vote  (alternar) */
   async toggleVote(id: string): Promise<void> {
     if (useApi()) return http.post(`/ideas/${id}/vote`, {});
     mockDb.update((d) => {
@@ -335,12 +350,12 @@ export const ideasService = {
 /* ================= Notificações ================= */
 
 export const notificationsService = {
-  /** TODO(api): GET /notifications  (futuro: tempo real via WebSocket/SSE) */
+  /** API: GET /notifications  (futuro: tempo real via WebSocket/SSE) */
   async list(): Promise<AppNotification[]> {
     if (useApi()) return http.get('/notifications');
     return simulate(() => db().notifications);
   },
-  /** TODO(api): POST /notifications/read-all */
+  /** API: POST /notifications/read-all */
   async markAllRead(): Promise<void> {
     if (useApi()) return http.post('/notifications/read-all', {});
     mockDb.update((d) => {
@@ -353,12 +368,12 @@ export const notificationsService = {
 /* ================= Configurações (integrações) ================= */
 
 export const settingsService = {
-  /** TODO(api): GET /settings/radar-sources */
+  /** API: GET /settings/radar-sources */
   async radarSources(): Promise<RadarSource[]> {
     if (useApi()) return http.get('/settings/radar-sources');
     return simulate(() => db().radarSources);
   },
-  /** Salva a lista inteira (ativar/pausar, adicionar). TODO(api): PUT /settings/radar-sources */
+  /** Salva a lista inteira (ativar/pausar, adicionar). API: PUT /settings/radar-sources */
   async saveRadarSources(list: RadarSource[]): Promise<RadarSource[]> {
     if (useApi()) return http.request('/settings/radar-sources', { method: 'PUT', body: JSON.stringify(list) });
     mockDb.update((d) => {
@@ -366,12 +381,17 @@ export const settingsService = {
     });
     return simulate(() => db().radarSources);
   },
-  /** Atalhos do "Acesso rápido". TODO(api): GET /settings/shortcuts */
+  /** Atalhos do "Acesso rápido". API: GET /settings/shortcuts */
   async shortcuts(): Promise<Shortcut[]> {
     if (useApi()) return http.get('/settings/shortcuts');
     return simulate(() => db().shortcuts);
   },
-  /** TODO(api): PUT /settings/shortcuts */
+  async saveShortcut(id: string, url: string): Promise<Shortcut> {
+    if (useApi()) return http.patch(`/settings/shortcuts/${id}`, { url });
+    mockDb.update(d => { const item=d.shortcuts.find(s=>s.id===id); if (item) item.url=url; });
+    return simulate(() => db().shortcuts.find(s=>s.id===id)!);
+  },
+  /** API: PUT /settings/shortcuts */
   async saveShortcuts(list: Shortcut[]): Promise<Shortcut[]> {
     if (useApi()) return http.request('/settings/shortcuts', { method: 'PUT', body: JSON.stringify(list) });
     mockDb.update((d) => {
@@ -387,13 +407,24 @@ export const preferencesService = {
   get(): UserPreferences {
     return db().preferences;
   },
-  /** V1: salvo só neste navegador. TODO(api): PATCH /me/preferences */
-  save(prefs: UserPreferences) {
-    mockDb.update((d) => {
-      d.preferences = prefs;
-    });
+  async load(): Promise<UserPreferences> {
+    return useApi() ? http.get('/me/preferences') : db().preferences;
+  },
+  async save(prefs: UserPreferences): Promise<UserPreferences> {
+    if (useApi()) return http.request('/me/preferences', {method:'PUT',body:JSON.stringify(prefs)});
+    mockDb.update(d => { d.preferences=prefs; });
+    return prefs;
   },
 };
 
 export { mockDb, devFlags } from './core';
 export { uid } from './core';
+
+/* Agenda usa a API persistida. Não simula geração automática no navegador. */
+export const agendaService = {
+  list: () => http.get<import('@/types/models').TaskSchedule[]>('/agenda'),
+  create: (input: import('@/types/models').ScheduleInput) => http.post<import('@/types/models').TaskSchedule>('/agenda', input),
+  update: (id: string, input: import('@/types/models').ScheduleInput) => http.request<import('@/types/models').TaskSchedule>(`/agenda/${id}`, {method:'PUT',body:JSON.stringify(input)}),
+  active: (id: string, active: boolean) => http.patch(`/agenda/${id}/active`,{active}),
+  remove: (id: string) => http.del(`/agenda/${id}`),
+};

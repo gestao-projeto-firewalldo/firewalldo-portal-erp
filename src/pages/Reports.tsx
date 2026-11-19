@@ -1,15 +1,20 @@
 import { useState, type CSSProperties } from 'react';
-import { AlertTriangle, BarChart3, CheckCircle2, Clock, ListChecks, PieChart, Target, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, Layers as LayersIcon, CheckCircle2, Clock, ListChecks, PieChart, Target, Users, RefreshCw } from 'lucide-react';
 import { Async, Avatar, Progress, Skeleton } from '@/components/ui';
-import { useSession } from '@/context/SessionContext';
+import { projectProgress } from '@/lib/progress';
 import { useQuery } from '@/hooks/useQuery';
-import { tasksService } from '@/services';
+import { tasksService, projectsService, membersService } from '@/services';
 import { categoryColor, categoryLabel, daysUntil, statusColor, statusLabel, statusOrder } from '@/lib/labels';
-import type { Category, Task } from '@/types/models';
+import type { Category, Task, Project } from '@/types/models';
 
 export default function Reports() {
-  const q = useQuery(() => tasksService.list());
-  const { projects, members } = useSession();
+  const q = useQuery(async () => {
+    const [tasks,projects,members]=await Promise.all([tasksService.list(),projectsService.list(),membersService.list()]);
+    return {tasks,projects,members};
+  });
+  const [projectId,setProjectId]=useState('');
+  const [brand,setBrand]=useState('');
+  const brands=Array.from(new Set((q.data?.projects ?? []).map(p=>p.brand?.trim()).filter((b):b is string=>!!b))).sort();
 
   return (
     <div className="page">
@@ -18,9 +23,10 @@ export default function Reports() {
           <h1>
             <BarChart3 /> Relatórios
           </h1>
-          <p>Acompanhamento visual calculado a partir das tarefas e projetos.</p>
-        </div>
+          <p>Dados reais das tarefas e projetos. Atualiza ao voltar à aba e a cada minuto.</p>
+        </div><button className="btn" onClick={q.refetch} disabled={q.loading}><RefreshCw/> Atualizar</button>
       </div>
+      <div className="toolbar"><div className="field grow"><label htmlFor="report-brand">Marca / cliente</label><select id="report-brand" className="select" value={brand} onChange={e=>{setBrand(e.target.value);setProjectId('');}}><option value="">Todas as marcas</option><option value="__none">Sem marca</option>{brands.map(b=><option key={b} value={b}>{b}</option>)}</select></div><div className="field grow"><label htmlFor="report-project">Projeto</label><select id="report-project" className="select" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">Todos os projetos</option>{(q.data?.projects ?? []).filter(p=>!brand || (brand==='__none'?!p.brand:p.brand===brand)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div></div>
       <Async
         q={q}
         loading={
@@ -30,12 +36,16 @@ export default function Reports() {
           </div>
         }
       >
-        {(tasks) => {
+        {(data) => {
+          const projects=data.projects.filter(p=>(!projectId || p.id===projectId) && (!brand || (brand==='__none'?!p.brand:p.brand===brand)));
+          const tasks=data.tasks.filter(t=>!brand && !projectId || projects.some(p=>p.id===t.projectId));
+          const members=data.members;
+          const progress=(p:Project)=>projectProgress(p,data.tasks);
           const done = tasks.filter((t) => t.status === 'concluido');
           const late = tasks.filter((t) => t.dueDate && t.status !== 'concluido' && daysUntil(t.dueDate) < 0);
           const dueSoon = tasks.filter((t) => t.dueDate && t.status !== 'concluido' && daysUntil(t.dueDate) >= 0 && daysUntil(t.dueDate) <= 7);
           const rate = tasks.length ? Math.round((done.length / tasks.length) * 100) : 0;
-          const avgProject = projects.length ? Math.round(projects.reduce((s, p) => s + p.progress, 0) / projects.length) : 0;
+          const avgProject = projects.length ? Math.round(projects.reduce((s, p) => s + progress(p), 0) / projects.length) : 0;
 
           const kpis = [
             { l: 'Total de tarefas', v: tasks.length, icon: ListChecks, c: 'var(--primary)' },
@@ -77,6 +87,7 @@ export default function Reports() {
                   <span className="muted small" style={{ marginLeft: 'auto' }}>média {avgProject}%</span>
                 </div>
                 <div className="card-body">
+                  {!projects.length && <p className="muted">Nenhum projeto neste filtro.</p>}
                   {projects.map((p) => {
                     const linked = tasks.filter((t) => t.projectId === p.id);
                     const d = linked.filter((t) => t.status === 'concluido').length;
@@ -85,10 +96,10 @@ export default function Reports() {
                         <div className="kv" style={{ marginBottom: 6 }}>
                           <b>{p.name}</b>
                           <span>
-                            {d}/{linked.length} tarefas · <b>{p.progress}%</b>
+                            {d}/{linked.length} tarefas · <b>{progress(p)}%</b>
                           </span>
                         </div>
-                        <Progress value={p.progress} />
+                        <Progress value={progress(p)} />
                       </div>
                     );
                   })}
@@ -98,10 +109,10 @@ export default function Reports() {
               <section className="card span-7">
                 <div className="card-head">
                   <BarChart3 className="icon" />
-                  <h2>Distribuição por categoria</h2>
+                  <h2>Tarefas por categoria</h2>
                 </div>
                 <div className="card-body">
-                  <CategoryBars tasks={tasks} />
+                  <p className="muted small">A categoria é definida na tarefa. Novas tarefas sugerem a categoria do projeto.</p><CategoryBars tasks={tasks} />
                 </div>
               </section>
 
@@ -139,6 +150,7 @@ export default function Reports() {
                 </div>
               </section>
 
+              <section className="card span-12"><div className="card-head"><LayersIcon/><h2>Projetos por categoria</h2></div><div className="card-body"><p className="muted small">Categoria atribuída ao projeto. Cadastros antigos aparecem como “Sem categoria” até serem editados.</p><CategoryBars tasks={[]} projects={projects}/></div></section>
               <section className="card span-12">
                 <div className="card-head">
                   <ListChecks className="icon" />
@@ -149,7 +161,7 @@ export default function Reports() {
                     <thead>
                       <tr>
                         <th>Categoria</th>
-                        <th>Total</th>
+                        <th>Tarefas</th><th>Projetos</th>
                         <th>Em andamento</th>
                         <th>Concluídas</th>
                         <th>Atrasadas</th>
@@ -157,24 +169,25 @@ export default function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(Object.keys(categoryLabel) as Category[]).map((c) => {
+                      {([...(Object.keys(categoryLabel) as Category[]),'sem_categoria'] as const).map((c) => {
                         const ts = tasks.filter((t) => t.category === c);
+                        const ps=projects.filter(p=>(p.category || 'sem_categoria')===c).length;
                         const d = ts.filter((t) => t.status === 'concluido').length;
                         const pct = ts.length ? Math.round((d / ts.length) * 100) : 0;
                         return (
                           <tr key={c} style={{ cursor: 'default' }}>
                             <td>
                               <span className="row">
-                                <i style={{ width: 10, height: 10, borderRadius: 3, background: categoryColor[c] }} /> {categoryLabel[c]}
+                                <i style={{ width: 10, height: 10, borderRadius: 3, background: categoryColor[c as Category] ?? 'var(--muted)' }} /> {categoryLabel[c as Category] ?? 'Sem categoria'}
                               </span>
                             </td>
-                            <td>{ts.length}</td>
+                            <td>{ts.length}</td><td>{ps}</td>
                             <td>{ts.filter((t) => t.status === 'em_andamento').length}</td>
                             <td>{d}</td>
                             <td style={{ color: 'var(--danger)' }}>{ts.filter((t) => late.includes(t)).length || '—'}</td>
                             <td>
                               <span className="row">
-                                <span className="grow"><Progress value={pct} small color={categoryColor[c]} /></span>
+                                <span className="grow"><Progress value={pct} small color={categoryColor[c as Category] ?? 'var(--muted)'} /></span>
                                 <b style={{ width: 40, textAlign: 'right' }}>{pct}%</b>
                               </span>
                             </td>
@@ -258,12 +271,12 @@ function StatusDonut({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function CategoryBars({ tasks }: { tasks: Task[] }) {
-  const cats = Object.keys(categoryLabel) as Category[];
+function CategoryBars({ tasks, projects }: { tasks: Task[];projects?:Project[] }) {
+  const cats: string[]=[...Object.keys(categoryLabel),...(projects?['sem_categoria']:[])];
   const data = cats.map((c) => ({
     c,
-    open: tasks.filter((t) => t.category === c && t.status !== 'concluido').length,
-    done: tasks.filter((t) => t.category === c && t.status === 'concluido').length,
+    open: projects ? projects.filter(p=>(p.category || 'sem_categoria')===c && p.status!=='concluido').length : tasks.filter((t) => t.category === c && t.status !== 'concluido').length,
+    done: projects ? projects.filter(p=>(p.category || 'sem_categoria')===c && p.status==='concluido').length : tasks.filter((t) => t.category === c && t.status === 'concluido').length,
   }));
   const max = Math.max(1, ...data.map((d) => d.open + d.done));
   const W = 600;
@@ -276,9 +289,10 @@ function CategoryBars({ tasks }: { tasks: Task[] }) {
     <>
       <div className="legend" style={{ marginBottom: 8 }}>
         <span style={{ '--c': 'var(--electric)' } as CSSProperties}><i /> Em aberto</span>
-        <span style={{ '--c': 'var(--success)' } as CSSProperties}><i /> Concluídas</span>
+        <span style={{ '--c': 'var(--success)' } as CSSProperties}><i /> {projects ? 'Concluídos' : 'Concluídas'}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="Tarefas por categoria">
+      <div className="category-chart-mobile" role="img" aria-label={projects?'Projetos por categoria — barras':'Tarefas por categoria — barras'}>{data.map(d=><div key={d.c}><div className="kv"><span>{categoryLabel[d.c as Category] ?? 'Sem categoria'}</span><b>{d.open} em aberto · {d.done} {projects?'concluídos':'concluídas'}</b></div><div className="category-chart-track"><span style={{width:`${100*d.open/max}%`,background:'var(--electric)'}}/><span style={{width:`${100*d.done/max}%`,background:'var(--success)'}}/></div></div>)}</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart category-chart-desktop" role="img" aria-label={projects ? "Projetos por categoria" : "Tarefas por categoria"}>
         {ticks.map((t) => (
           <g key={t}>
             <line className="grid-line" x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} />
@@ -292,16 +306,16 @@ function CategoryBars({ tasks }: { tasks: Task[] }) {
           const yTop = y(d.open + d.done);
           return (
             <g key={d.c}>
-              <title>{`${categoryLabel[d.c]}: ${d.open} em aberto, ${d.done} concluídas`}</title>
+              <title>{`${categoryLabel[d.c as Category] ?? 'Sem categoria'}: ${d.open} em aberto, ${d.done} concluídas`}</title>
               <rect x={x} y={yOpen} width={w} height={H - pad.b - yOpen} fill="var(--electric)" rx="4" opacity="0.9" />
               <rect x={x} y={yTop} width={w} height={Math.max(0, yOpen - yTop)} fill="var(--success)" rx="4" />
               <text x={x + w / 2} y={yTop - 6} textAnchor="middle" style={{ fill: 'var(--text)', fontWeight: 700 }}>
                 {d.open + d.done}
               </text>
-              <text x={x + w / 2} y={H - 12} textAnchor="middle">
-                {categoryLabel[d.c].slice(0, 11)}
+              <text x={x + w / 2} y={H - 12} textAnchor="middle" style={{fontSize:10}}>
+                {categoryLabel[d.c as Category] ?? 'Sem categoria'}
               </text>
-              <rect x={x - 2} y={H - pad.b} width={w + 4} height="3" rx="1.5" fill={categoryColor[d.c]} />
+              <rect x={x - 2} y={H - pad.b} width={w + 4} height="3" rx="1.5" fill={categoryColor[d.c as Category] ?? 'var(--muted)'} />
             </g>
           );
         })}

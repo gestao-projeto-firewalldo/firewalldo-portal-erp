@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Inbox, RefreshCw, Search, X } from 'lucide-react';
 import { categoryColor, categoryLabel, cx, priorityLabel, priorityTone } from '@/lib/labels';
@@ -124,6 +124,7 @@ export function Modal({
   footer,
   width,
   icon,
+  error,
 }: {
   open: boolean;
   onClose: () => void;
@@ -133,37 +134,50 @@ export function Modal({
   footer?: ReactNode;
   width?: number;
   icon?: ReactNode;
+  error?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current();
+      if (e.key !== 'Tab') return;
+      const nodes = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([hidden]), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(el => el.getClientRects().length);
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    ref.current?.focus();
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return createPortal(
-    <div className="modal-root" role="dialog" aria-modal="true">
+    <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal-scrim" onClick={onClose} />
       <div className="modal" style={{ '--w': width ? `${width}px` : undefined } as CSSProperties} ref={ref} tabIndex={-1}>
         <div className="modal-head">
           {icon}
           <div className="grow">
-            <h2>{title}</h2>
+            <h2 id={titleId}>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
           <button className="icon-btn close" onClick={onClose} aria-label="Fechar">
             <X />
           </button>
         </div>
-        <div className="modal-body">{children}</div>
-        {footer && <div className="modal-foot">{footer}</div>}
+        <div className="modal-body">{error && !footer && <p className="modal-error" role="alert">{error}</p>}{children}</div>
+        {footer && <div className="modal-foot">{error && <p className="modal-error" role="alert">{error}</p>}{footer}</div>}
       </div>
     </div>,
     document.body,

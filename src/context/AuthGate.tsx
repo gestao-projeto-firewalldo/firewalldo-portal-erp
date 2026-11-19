@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Logo } from '@/components/ui';
 import { http, ServiceError, useApi } from '@/services/core';
 
@@ -22,7 +23,8 @@ function PortalLogin({ children }: { children: ReactNode }) {
   const checkSession = async () => {
     setSession('checking');
     try {
-      await http.get('/auth/me');
+      const member = await http.get<{id:string}>('/auth/me');
+      window.dispatchEvent(new CustomEvent('firewalldo:authenticated', {detail:member}));
       setSession('ready');
     } catch (err) {
       setSession(err instanceof ServiceError && err.code === 'UNAUTHENTICATED' ? 'login' : 'error');
@@ -52,7 +54,8 @@ function PortalLogin({ children }: { children: ReactNode }) {
         setSession('login');
         setMessage('Senha criada. Entre com seu e-mail e a nova senha.');
       } else {
-        await http.post('/auth/login', { email, senha });
+        const result = await http.post<{user:{id:string}}>('/auth/login', { email, senha });
+        window.dispatchEvent(new CustomEvent('firewalldo:authenticated', {detail:result.user}));
         setSession('ready');
       }
       setSenha('');
@@ -88,12 +91,12 @@ function PortalLogin({ children }: { children: ReactNode }) {
               )}
               <div className="field">
                 <label htmlFor="login-password">{invite ? 'Nova senha (mínimo de 12 caracteres)' : 'Senha'}</label>
-                <input className="input" id="login-password" type="password" autoComplete={invite ? 'new-password' : 'current-password'} minLength={invite ? 12 : undefined} maxLength={128} required value={senha} onChange={(e) => setSenha(e.target.value)} />
+                <PasswordInput id="login-password" autoComplete={invite ? 'new-password' : 'current-password'} minLength={invite ? 12 : undefined} maxLength={128} required value={senha} onChange={(e) => setSenha(e.target.value)} />
               </div>
               {invite && (
                 <div className="field">
                   <label htmlFor="login-confirm">Confirme a senha</label>
-                  <input className="input" id="login-confirm" type="password" autoComplete="new-password" required value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} />
+                  <PasswordInput id="login-confirm" autoComplete="new-password" required value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} />
                 </div>
               )}
               {error && <p role="alert" style={{ color: 'var(--danger)' }}>{error}</p>}

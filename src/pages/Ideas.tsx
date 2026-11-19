@@ -128,6 +128,7 @@ export default function Ideas() {
 function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnType<typeof useSession>['members'][number]; authorName?: string }) {
   const { can } = useSession();
   const openTask = useTaskEditor();
+  const toast = useToast();
   const [menu, setMenu] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -160,7 +161,7 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
                     key={s}
                     className="dropdown-item"
                     onClick={() => {
-                      ideasService.setStatus(idea.id, s);
+                      void ideasService.setStatus(idea.id, s).catch(error=>toast({tone:'error',title:'Não foi possível alterar a ideia',description:error.message}));
                       setMenu(false);
                     }}
                   >
@@ -191,7 +192,7 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
           <span className="row" style={{ gap: 10 }}>
             <CatIcon size={20} style={{ color: 'var(--primary-text)' }} /> {ideaCategoryLabel[idea.category]}
           </span>
-          <button className={cx('like', idea.votedByMe && 'on')} onClick={() => ideasService.toggleVote(idea.id)} aria-pressed={idea.votedByMe}>
+          <button className={cx('like', idea.votedByMe && 'on')} onClick={() => void ideasService.toggleVote(idea.id).catch(error=>toast({tone:'error',title:'Não foi possível salvar o voto',description:error.message}))} aria-pressed={idea.votedByMe}>
             <ThumbsUp size={18} /> Gostei {idea.votes}
           </button>
         </div>
@@ -220,9 +221,12 @@ function NewIdeaModal({ onClose }: { onClose: () => void }) {
   const save = async () => {
     if (title.trim().length < 4) return setErr('Dê um título com pelo menos 4 caracteres.');
     setSaving(true);
-    await ideasService.create({ title: title.trim(), description: description.trim(), category });
-    toast({ tone: 'success', title: 'Ideia registrada', description: title });
-    onClose();
+    try {
+      await ideasService.create({ title: title.trim(), description: description.trim(), category });
+      toast({ tone: 'success', title: 'Ideia registrada', description: title });
+      onClose();
+    } catch(error) { setErr((error as Error).message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -230,6 +234,7 @@ function NewIdeaModal({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Nova ideia"
+      error={err}
       subtitle="Compartilhe uma proposta de conteúdo ou melhoria com a equipe."
       icon={<span className="icon-tile"><Lightbulb /></span>}
       width={560}
@@ -264,7 +269,6 @@ function NewIdeaModal({ onClose }: { onClose: () => void }) {
             })}
           </div>
         </div>
-        {err && <div className="full small" style={{ color: 'var(--danger)' }}>{err}</div>}
       </div>
     </Modal>
   );

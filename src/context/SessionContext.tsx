@@ -4,18 +4,14 @@ import { useApi } from '@/services/core';
 import { useQuery } from '@/hooks/useQuery';
 import type { Member, Permission, Project, Role } from '@/types/models';
 
+const adminPermissions: Permission[] = [
+  'tarefas.criar', 'tarefas.editar_todas', 'tarefas.aceitar', 'projetos.gerenciar',
+  'biblioteca.enviar', 'usuarios.gerenciar', 'noticias.curar', 'relatorios.ver',
+  'configuracoes.integracoes', 'auditoria.ver',
+];
 export const rolePermissions: Record<Role, Permission[]> = {
-  admin: [
-    'tarefas.criar',
-    'tarefas.editar_todas',
-    'tarefas.aceitar',
-    'projetos.gerenciar',
-    'biblioteca.enviar',
-    'usuarios.gerenciar',
-    'noticias.curar',
-    'relatorios.ver',
-    'configuracoes.integracoes',
-  ],
+  superadmin: [...adminPermissions, 'administradores.gerenciar'],
+  admin: adminPermissions,
   usuario: ['tarefas.aceitar', 'biblioteca.enviar', 'relatorios.ver'],
 };
 
@@ -27,6 +23,7 @@ interface SessionCtx {
   projectsById: Record<string, Project>;
   can: (p: Permission) => boolean;
   loading: boolean;
+  error: Error | null;
 }
 
 const Ctx = createContext<SessionCtx | null>(null);
@@ -59,8 +56,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       projectsById: Object.fromEntries(ps.map((p) => [p.id, p])),
       can: (p) => rolePermissions[role].includes(p),
       loading: me.loading || members.loading || projects.loading,
+      error: me.error || members.error || projects.error,
     };
-  }, [me.data, me.loading, members.data, members.loading, projects.data, projects.loading]);
+  }, [me.data, me.loading, me.error, members.data, members.loading, members.error, projects.data, projects.loading, projects.error]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

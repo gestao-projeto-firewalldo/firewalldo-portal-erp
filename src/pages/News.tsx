@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FormDateInput } from '@/components/ui/DateInput';
 import { useSearchParams } from 'react-router-dom';
 import { BarChart3, Bookmark, BookmarkCheck, FilePlus2, Filter, FlaskConical, Sparkles } from 'lucide-react';
 import { Async, DemoBadge, EmptyState, Modal, SearchInput, Skeleton } from '@/components/ui';
@@ -22,7 +23,8 @@ const categoryNames: Record<NewsCategory, string> = {
 };
 
 export default function News() {
-  const q = useQuery(() => newsService.list());
+  const [drafts,setDrafts]=useState(false);
+  const q = useQuery(() => newsService.list(drafts),[drafts]);
   const { can } = useSession();
   const [publishing, setPublishing] = useState(false);
   const savedQ = useQuery(() => newsService.savedIds());
@@ -120,7 +122,7 @@ export default function News() {
           </button>
           {!useApi() && <span className="sync-status"><FlaskConical size={18} /> Dados de demonstração</span>}
           {useApi() && can('noticias.curar') && (
-            <button className="btn primary" onClick={() => setPublishing(true)}>Publicar notícia</button>
+            <><button className="btn" aria-pressed={drafts} onClick={()=>{setDrafts(!drafts);setReading(null);}}>{drafts ? 'Ver publicadas' : 'Para aprovação'}</button><button className="btn primary" onClick={() => setPublishing(true)}>Publicar notícia</button></>
           )}
         </div>
       </div>
@@ -219,9 +221,11 @@ export default function News() {
           subtitle={`${reading.source} · ${longDate(reading.publishedAt)} · ${reading.readMinutes} min de leitura`}
           footer={
             <>
-              <button className="btn" onClick={() => toggleSave(reading)}>
+              {drafts && can('noticias.curar') && <button className="btn primary" onClick={async()=>{try{await http.post(`/news/${reading.id}/publish`,{});setReading(null);toast({tone:'success',title:'Notícia publicada'});}catch(e){toast({tone:'error',title:'Não foi possível publicar',description:(e as Error).message});}}}>Aprovar publicação</button>}
+              {can('noticias.curar') && <button className="btn danger" onClick={async()=>{if(!confirm('Excluir esta notícia do Radar?'))return;try{await http.del(`/news/${reading.id}`);setReading(null);toast({tone:'success',title:'Notícia excluída'});}catch(e){toast({tone:'error',title:'Não foi possível excluir',description:(e as Error).message});}}}>Excluir</button>}
+              {!drafts && <button className="btn" onClick={() => toggleSave(reading)}>
                 {saved.includes(reading.id) ? <BookmarkCheck /> : <Bookmark />} {saved.includes(reading.id) ? 'Salva' : 'Salvar'}
-              </button>
+              </button>}
               {can('tarefas.criar') && <button
                 className="btn"
                 onClick={() => {
@@ -246,12 +250,15 @@ export default function News() {
         >
           <div className="reader">
             <NewsCover item={reading} />
+            {reading.imageCredit && <p className="small muted">{reading.imageCredit} {reading.imageSourceUrl && <a href={reading.imageSourceUrl} target="_blank" rel="noreferrer">Créditos e origem da imagem</a>}</p>}
+            {reading.importedAt && <p className="small muted">Resumo preparado automaticamente a partir das fontes indicadas. Consulte as referências para o conteúdo completo.</p>}
             <div className="row" style={{ marginBottom: 14 }}>
               <NewsCategoryBadge c={reading.category} />
               {reading.isDemo && <DemoBadge>Notícia de demonstração</DemoBadge>}
             </div>
             <p style={{ fontWeight: 600 }}>{reading.summary}</p>
             {reading.url && !reading.isDemo && <p><a href={reading.url} target="_blank" rel="noreferrer">Abrir fonte original</a></p>}
+            {!!reading.references?.length && <div><h3>Referências</h3><ul>{reading.references.map(ref=><li key={ref.url}><a href={ref.url} target="_blank" rel="noreferrer">{ref.title}</a></li>)}</ul></div>}
             {reading.body.map((p, i) => (
               <p key={i} className="muted">{p}</p>
             ))}
@@ -274,7 +281,7 @@ function PublishNews({ onClose }: { onClose: () => void }) {
   const toast = useToast();
 
   return (
-    <Modal open onClose={onClose} title="Publicar notícia" width={680}>
+    <Modal open onClose={onClose} title="Publicar notícia" error={error} width={680}>
       {sources.error && <p role="alert">{sources.error.message}</p>}
       {!sources.loading && !sources.error && !active.length && <p>Configure uma fonte ativa em Configurações → Integrações.</p>}
       <form className="form-grid" onSubmit={async (event) => {
@@ -305,12 +312,13 @@ function PublishNews({ onClose }: { onClose: () => void }) {
         <div className="field"><label htmlFor="news-category">Categoria</label><select className="select" id="news-category" name="category" required>
           {Object.entries(categoryNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select></div>
-        <div className="field"><label htmlFor="news-date">Data de publicação</label><input className="input" id="news-date" name="publishedAt" type="date" required /></div>
+        <div className="field"><label htmlFor="news-date">Data de publicação</label><FormDateInput id="news-date" name="publishedAt" required /></div>
         <div className="field"><label htmlFor="news-url">Link da notícia</label><input className="input" id="news-url" name="url" type="url" required /></div>
+        <div className="field full"><label htmlFor="news-image">URL da imagem (opcional)</label><input className="input" id="news-image" name="imageUrl" type="url" placeholder="https://... (PNG, JPEG, WebP ou GIF, até 2 MB)" /></div><div className="field full"><label htmlFor="news-credit">Crédito da imagem</label><input className="input" id="news-credit" name="imageCredit" maxLength={500} /></div>
         <div className="field full"><label htmlFor="news-summary">Resumo</label><textarea className="input" id="news-summary" name="summary" rows={2} maxLength={1000} required /></div>
         <div className="field full"><label htmlFor="news-body">Texto da notícia</label><textarea className="input" id="news-body" name="body" rows={5} required /></div>
         <label className="row full"><input type="checkbox" name="featured" /> Colocar em destaque</label>
-        {error && <p className="full" role="alert" style={{ color: 'var(--danger)' }}>{error}</p>}
+
         <div className="actions full"><button className="btn primary" type="submit" disabled={saving || !active.length}>Publicar</button></div>
       </form>
     </Modal>

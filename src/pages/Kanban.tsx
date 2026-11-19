@@ -8,7 +8,7 @@ import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
 import { tasksService } from '@/services';
-import { cx, daysUntil, shortDate, statusColor, statusLabel, statusOrder } from '@/lib/labels';
+import { cx, daysUntil, shortDate, statusColor, statusLabel, statusOrder, ticketLabel } from '@/lib/labels';
 import type { Member, Project, Task, TaskStatus } from '@/types/models';
 
 type View = 'kanban' | 'lista' | 'calendario';
@@ -19,8 +19,8 @@ const views: { id: View; label: string }[] = [
 ];
 
 export default function Tasks() {
-  const q = useQuery(() => tasksService.list());
-  const { me, members, membersById, projects, projectsById } = useSession();
+  const q = useQuery(() => tasksService.list(), [], 15000);
+  const { me, members, membersById, projects, projectsById, can } = useSession();
   const openTask = useTaskEditor();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -85,8 +85,8 @@ export default function Tasks() {
             ))}
           </select>
           <select className="select" value={assignee} onChange={(e) => setAssignee(e.target.value)} aria-label="Responsável">
-            <option value="">Responsável</option>
-            {members.map((m) => (
+            <option value="">{can('tarefas.editar_todas') ? 'Todos' : 'Minhas tarefas'}</option>
+            {members.filter(m=>can('tarefas.editar_todas') || m.id===me?.id).map((m) => (
               <option key={m.id} value={m.id}>{m.id === me?.id ? `${m.name} (eu)` : m.name}</option>
             ))}
           </select>
@@ -148,8 +148,9 @@ function Board({
       toast({ tone: 'error', title: 'Sem permissão', description: 'Você só pode mover tarefas em que é responsável.' });
       return;
     }
-    await tasksService.move(t.id, col, null);
+    try { await tasksService.move(t.id, col, null);
     toast({ tone: col === 'concluido' ? 'celebrate' : 'info', title: col === 'concluido' ? 'Tarefa concluída' : `Movida para ${statusLabel[col]}`, description: t.title });
+    } catch(error) { toast({tone:'error',title:'Não foi possível mover a tarefa',description:(error as Error).message}); }
   };
 
   return (
@@ -244,6 +245,7 @@ function TaskCard({
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
+      {ticketLabel(task)&&<span className="task-ticket">{ticketLabel(task)}</span>}
       <h4>{task.title}</h4>
       {project && !isBacklog && (
         <span className="project-chip">
@@ -338,7 +340,7 @@ function ListView({
         <tbody>
           {sorted.map((t) => (
             <tr key={t.id} onClick={() => onOpen(t)} style={{ cursor: 'pointer' }}>
-              <td style={{ fontWeight: 600 }}>{t.title}</td>
+              <td style={{ fontWeight: 600 }}>{ticketLabel(t)&&<span className="task-ticket">{ticketLabel(t)}</span>} {t.title}</td>
               <td className="hide-sm muted">{t.projectId ? projectsById[t.projectId]?.name : '—'}</td>
               <td>
                 <span className="status-pill" style={{ '--c': statusColor[t.status] } as CSSProperties}>
@@ -407,8 +409,8 @@ function CalendarView({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => v
             <div key={i} className={cx('cal-cell', key(d) === todayKey && 'today')}>
               <span className="cal-day">{d}</span>
               {list.slice(0, 3).map((t) => (
-                <button key={t.id} className="cal-task" style={{ '--c': statusColor[t.status] } as CSSProperties} onClick={() => onOpen(t)} title={t.title}>
-                  {t.title}
+                <button key={t.id} className="cal-task" style={{ '--c': statusColor[t.status] } as CSSProperties} onClick={() => onOpen(t)} title={`${ticketLabel(t)} ${t.title}`}>
+                  {ticketLabel(t)} {t.title}
                 </button>
               ))}
               {list.length > 3 && <span className="muted small">+{list.length - 3}</span>}

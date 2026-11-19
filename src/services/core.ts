@@ -38,7 +38,7 @@ export interface MockState {
   preferences: UserPreferences;
   currentUserId: string;
   /** Visualizar o portal como outro papel (somente demonstração de permissões). */
-  viewAsRole: 'admin' | 'usuario';
+  viewAsRole: 'superadmin' | 'admin' | 'usuario';
 }
 
 export const defaultPreferences: UserPreferences = {
@@ -157,9 +157,10 @@ export const today = () => new Date().toISOString().slice(0, 10);
 /** Cliente HTTP da API do portal. O navegador gerencia o cookie de sessão. */
 export const http = {
   async request<T>(path: string, init?: RequestInit): Promise<T> {
+    let device='';try{device=localStorage.getItem('firewalldo:push-device') || '';}catch{}
     const res = await fetch(`${appConfig.apiBaseUrl}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json', ...(device?{'X-Push-Device':device}:{}), ...(init?.headers ?? {}) },
     });
     if (!res.ok) {
       let message = `Erro ${res.status} em ${path}`;
