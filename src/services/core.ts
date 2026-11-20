@@ -60,7 +60,8 @@ function seedState(): MockState {
     members: seed.members,
     projects: seed.projects,
     tasks: seed.tasks,
-    news: seed.news,
+    // V1.9: o Radar mostra até 9 notícias (1 principal, 3 secundárias, 5 gerais).
+    news: seed.news.map((n, i) => ({ ...n, slot: i === 0 ? 'principal' : i < 4 ? 'secundaria' : i < 9 ? 'geral' : null })),
     savedNewsIds: ['n-4'],
     folders: seed.folders,
     files: seed.files,

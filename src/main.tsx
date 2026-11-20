@@ -21,3 +21,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 import './styles/responsive.css';
 
 import './styles/responsive.css';
+import './styles/v19.css';

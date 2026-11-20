@@ -1,15 +1,15 @@
 import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, CheckCircle2, CircleCheck, Info, Layers, Newspaper, Pencil, Plus, RefreshCw, SquareCheck, Users } from 'lucide-react';
-import { Async, Avatar, EmptyState, PriorityBadge, Progress, Skeleton, SkeletonList } from '@/components/ui';
+import { Async, Avatar, EmptyState, ErrorState, PriorityBadge, Progress, Skeleton, SkeletonList } from '@/components/ui';
 import { NewsCover, ProjectIcon, ShortcutLogo } from '@/components/shared';
 import { ShortcutEditor } from '@/components/shortcuts/ShortcutEditor';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
-import { newsService, notificationsService, settingsService, tasksService } from '@/services';
-import { categoryLabel, cx, daysUntil, relativeDay, shortDate , ticketLabel } from '@/lib/labels';
+import { newsService, notificationsService, projectsService, settingsService, tasksService } from '@/services';
+import { categoryLabel, cx, daysUntil, projectStatusLabel, relativeDay, shortDate , ticketLabel } from '@/lib/labels';
 import type { AppNotification, Shortcut } from '@/types/models';
 import { projectProgress } from '@/lib/progress';
 
@@ -45,7 +45,14 @@ export default function Dashboard() {
     .filter((t) => me && t.assigneeIds.includes(me.id) && t.status !== 'concluido')
     .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'))
     .slice(0, 4);
-  const running = projects.filter((p) => p.status === 'em_andamento');
+  // V1.9: antes só entravam projetos com status exatamente "em_andamento"; projetos novos nascem em
+  // "planejamento" e ficavam de fora. Agora a seção lista os projetos ativos (não pausados nem concluídos),
+  // com o status em cada item. A lista vem direto da API e é atualizada a cada mudança.
+  const projectsQ = useQuery(() => projectsService.list(), [], 30_000);
+  const activeOrder: Record<string, number> = { em_andamento: 0, planejamento: 1 };
+  const running = (projectsQ.data ?? projects)
+    .filter((p) => p.status === 'em_andamento' || p.status === 'planejamento')
+    .sort((a, b) => activeOrder[a.status] - activeOrder[b.status] || a.dueDate.localeCompare(b.dueDate));
 
   return (
     <div className="page">
@@ -132,17 +139,23 @@ export default function Dashboard() {
               Ver todos <ArrowRight size={16} />
             </Link>
           </div>
-          {loading ? (
+          {projectsQ.error && !projectsQ.data ? (
+            <ErrorState error={projectsQ.error} onRetry={projectsQ.refetch} />
+          ) : (loading || projectsQ.loading) && !projectsQ.data ? (
             <SkeletonList rows={3} h={60} />
           ) : running.length === 0 ? (
-            <EmptyState title="Nenhum projeto em andamento" />
+            <EmptyState title="Nenhum projeto em andamento" description="Projetos em planejamento ou em andamento aparecem aqui." />
           ) : (
             <div className="proj-list">
               {running.map((p) => (
                 <Link key={p.id} to={`/projetos/${p.id}`} className="proj-item">
                   <ProjectIcon project={{ ...p, color: 'var(--primary)' }} size={58} />
                   <div className="grow">
-                    <div className="proj-name">{p.name}</div>
+                    <div className="row" style={{ gap: 10, justifyContent: 'space-between', minWidth: 0 }}>
+                      <div className="proj-name ellipsis">{p.name}</div>
+                      <span className={cx('proj-status', p.status)}>{projectStatusLabel[p.status]}</span>
+                    </div>
+                    {p.subtitle && <div className="muted small ellipsis">{p.subtitle}</div>}
                     <div className="row" style={{ gap: 16 }}>
                       <div className="grow">
                         <Progress value={projectProgress(p, tasksQ.data)} />
@@ -258,7 +271,7 @@ export default function Dashboard() {
                     <NewsCover item={n} className="news-thumb sm" />
                     <div className="grow">
                       <div className="ellipsis" style={{ fontWeight: 600 }}>{n.title}</div>
-                      <div className="muted small">{n.source} · {relativeDay(n.publishedAt)}</div>
+                      <div className="muted small">{[n.slot === 'principal' ? 'Destaque' : n.source, relativeDay(n.publishedAt)].filter(Boolean).join(' · ')}</div>
                     </div>
                   </Link>
                 ))}

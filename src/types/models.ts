@@ -25,7 +25,10 @@ export interface Member {
   areas: Category[]; // áreas de atuação
   status: PresenceStatus;
   color: string; // cor do avatar (hex)
-  avatarUrl?: string; // foto (opcional, futura)
+  /** Foto de perfil (V1.9). Sem foto, o avatar mostra as iniciais. */
+  avatarUrl?: string | null;
+  /** Acesso individual ao Financeiro (administradores sempre têm). */
+  financeAccess?: boolean;
   bio?: string;
   /** Conta desativada não pode ser atribuída a tarefas. */
   active: boolean;
@@ -138,7 +141,25 @@ export interface LibraryFile {
 
 export type NewsCategory = 'ciberseguranca' | 'redes' | 'informatica' | 'programacao' | 'ia' | 'privacidade';
 
+/** Posição da notícia no Radar (V1.9): 1 principal, 3 secundárias e 5 gerais. */
+export type NewsSlot = 'principal' | 'secundaria' | 'geral';
+
+export interface NewsInput {
+  title: string;
+  summary: string;
+  /** Texto completo; parágrafos separados por linha em branco. */
+  body: string;
+  slot: NewsSlot;
+  /** Data URL da imagem nova; "" remove; ausente mantém a atual. */
+  image?: string;
+  sourceName?: string;
+  sourceUrl?: string;
+  publishedAt?: ISODate;
+}
+
 export interface NewsItem {
+  slot?: NewsSlot | null;
+  updatedAt?: string;
   publicationStatus?: 'draft' | 'published';
   importedAt?: string | null;
   references?: {url: string; title: string}[];
@@ -203,6 +224,8 @@ export interface AppNotification {
   title: string;
   description: string;
   createdAt: string;
+  /** Data/hora ISO (V1.9) para ordenar e detectar notificações novas. */
+  createdAtIso?: string;
   read: boolean;
   kind: 'tarefa' | 'projeto' | 'noticia' | 'sistema';
 }
@@ -246,7 +269,8 @@ export type Permission =
   | 'auditoria.ver'
   | 'noticias.curar'
   | 'relatorios.ver'
-  | 'configuracoes.integracoes';
+  | 'configuracoes.integracoes'
+  | 'financeiro.acessar';
 
 /* ---------------- Agenda de tarefas ---------------- */
 export type ScheduleKind = 'recurring' | 'weekly' | 'scheduled';
@@ -275,4 +299,99 @@ export interface TaskSchedule extends ScheduleInput {
   createdBy: ID;
   createdAt: string;
   updatedAt: string;
+}
+
+/* ---------------- Financeiro (V1.9) ---------------- */
+export type FinanceCategory = 'infraestrutura' | 'ferramentas' | 'servicos' | 'publicidade' | 'equipamentos' | 'pessoal' | 'impostos' | 'outros';
+export type Billing = 'unica' | 'recorrente';
+export type Frequency = 'mensal' | 'trimestral' | 'semestral' | 'anual';
+export type InvestmentStatus = 'ativo' | 'pausado' | 'encerrado';
+export type PaymentKind = 'pix' | 'boleto';
+export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+/** "vencido" é calculado pelo servidor: pendente com vencimento já passado. */
+export type PaymentStatus = 'pendente' | 'pago' | 'vencido' | 'cancelado';
+
+export interface InvestmentInput {
+  name: string;
+  supplierName: string;
+  legalName: string;
+  document: string;
+  category: FinanceCategory;
+  description: string;
+  ownerId: ID | null;
+  amountCents: number;
+  billing: Billing;
+  frequency: Frequency | null;
+  startDate: ISODate;
+  dueDay: number | null;
+  endDate: ISODate | null;
+  status: InvestmentStatus;
+  paymentMethod: PaymentKind;
+  pixKeyType: PixKeyType | null;
+  pixKey: string;
+  notes: string;
+}
+
+export interface Investment extends InvestmentInput {
+  id: ID;
+  monthlyCents: number | null;
+  paidCents: number;
+  pendingCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Payment {
+  id: ID;
+  kind: PaymentKind;
+  investmentId: ID | null;
+  investmentName: string | null;
+  period: string | null;
+  beneficiary: string;
+  document: string;
+  description: string;
+  amountCents: number;
+  dueDate: ISODate;
+  paidAt: ISODate | null;
+  status: PaymentStatus;
+  storedStatus: 'pendente' | 'pago' | 'cancelado';
+  pixKeyType: PixKeyType | null;
+  pixKey: string;
+  barcode: string;
+  hasAttachment: boolean;
+  attachmentName: string;
+  hasReceipt: boolean;
+  receiptName: string;
+  createdAt: string;
+}
+
+export interface PaymentInput {
+  kind: PaymentKind;
+  investmentId: ID | null;
+  beneficiary: string;
+  document: string;
+  description: string;
+  amountCents: number;
+  dueDate: ISODate;
+  pixKeyType?: PixKeyType | null;
+  pixKey?: string;
+  barcode?: string;
+  status?: 'pendente' | 'pago' | 'cancelado';
+  paidAt?: ISODate | null;
+  /** Data URL; "" remove; ausente mantém. */
+  attachment?: string;
+  attachmentName?: string;
+  receipt?: string;
+  receiptName?: string;
+}
+
+export interface FinanceSummary {
+  monthlyCents: number;
+  activeCount: number;
+  paidCents: number;
+  pendingCents: number;
+  overdueCents: number;
+  overdueCount: number;
+  period: string;
+  upcoming: Payment[];
 }

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  Briefcase,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   FileText,
   Home,
@@ -10,12 +12,20 @@ import {
   Lightbulb,
   LogOut,
   Menu,
+  Moon,
   Newspaper,
+  QrCode,
+  Receipt,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   SquareCheck,
+  Sun,
+  SunMoon,
+  TrendingUp,
   UserRound,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { Avatar, Logo, Modal } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
@@ -24,8 +34,10 @@ import { useQuery } from '@/hooks/useQuery';
 import { appConfig } from '@/config';
 import { http, useApi } from '@/services/core';
 import { useToast } from '@/context/ToastContext';
+import { usePrefs } from '@/context/PrefsContext';
 import { notificationsService, tasksService } from '@/services';
 import { cx, roleLabel } from '@/lib/labels';
+import type { AppNotification, Permission, UserPreferences } from '@/types/models';
 
 /** Telas fora do menu (acessíveis por link): /biblioteca e /relatorios. */
 export const extraRoutes = [
@@ -33,17 +45,37 @@ export const extraRoutes = [
   { to: '/relatorios', label: 'Relatórios' },
 ];
 
-export const navItems = [
+type NavIcon = ComponentType<{ size?: number }>;
+interface NavLeaf { to: string; label: string; icon: NavIcon; end?: boolean; crumb?: string; perm?: Permission }
+interface NavGroup { id: string; label: string; icon: NavIcon; items: NavLeaf[]; perm?: Permission }
+
+/** Barra lateral V1.9: Início avulso + submenus. */
+export const navTree: (NavLeaf | NavGroup)[] = [
   { to: '/', label: 'Início', crumb: 'Visão geral', icon: Home, end: true },
-  { to: '/radar', label: 'Radar de notícias', icon: Newspaper },
-  { to: '/ideias', label: 'Ideias', icon: Lightbulb },
-  { to: '/projetos', label: 'Projetos', icon: Layers },
-  { to: '/tarefas', label: 'Tarefas', icon: SquareCheck },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-  { to: '/usuarios', label: 'Usuários', icon: Users },
-  { to: '/auditoria', label: 'Auditoria', icon: ShieldCheck },
-  { to: '/configuracoes', label: 'Configurações', icon: Settings },
+  { id: 'conteudo', label: 'Conteúdo', icon: Newspaper, items: [
+    { to: '/radar', label: 'Radar de notícias', icon: Newspaper },
+    { to: '/ideias', label: 'Ideias', icon: Lightbulb },
+  ] },
+  { id: 'gestao', label: 'Gestão', icon: Briefcase, items: [
+    { to: '/projetos', label: 'Projetos', icon: Layers },
+    { to: '/tarefas', label: 'Tarefas', icon: SquareCheck },
+    { to: '/agenda', label: 'Agenda', icon: CalendarDays },
+  ] },
+  { id: 'financeiro', label: 'Financeiro', icon: Wallet, perm: 'financeiro.acessar', items: [
+    { to: '/financeiro/investimentos', label: 'Investimentos', icon: TrendingUp },
+    { to: '/financeiro/pix', label: 'Pix', icon: QrCode },
+    { to: '/financeiro/boletos', label: 'Boletos', icon: Receipt },
+  ] },
+  { id: 'sistema', label: 'Sistema', icon: Settings, items: [
+    { to: '/usuarios', label: 'Usuários', icon: Users },
+    { to: '/auditoria', label: 'Auditoria', icon: ShieldCheck, perm: 'auditoria.ver' },
+    { to: '/configuracoes', label: 'Configurações', icon: SlidersHorizontal },
+  ] },
 ];
+const isGroup = (n: NavLeaf | NavGroup): n is NavGroup => 'items' in n;
+/** Lista plana (breadcrumbs e buscas). */
+export const navItems: NavLeaf[] = navTree.flatMap((n) => (isGroup(n) ? n.items : [n]));
+const OPEN_KEY = 'firewalldo:menu-open';
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,6 +105,17 @@ function Sidebar({ open }: { open: boolean }) {
   const { me, can } = useSession();
   const nav = useNavigate();
   const mine = (q.data ?? []).filter((t) => me && t.assigneeIds.includes(me.id) && t.status !== 'concluido').length;
+  const { pathname } = useLocation();
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]'); } catch { return []; }
+  });
+  // Ao abrir uma página (inclusive pela URL), o submenu dela aparece expandido.
+  useEffect(() => {
+    const group = navTree.find((n) => isGroup(n) && n.items.some((i) => pathname.startsWith(i.to))) as NavGroup | undefined;
+    if (group) setExpandedGroups((list) => (list.includes(group.id) ? list : [...list, group.id]));
+  }, [pathname]);
+  useEffect(() => { try { localStorage.setItem(OPEN_KEY, JSON.stringify(expandedGroups)); } catch { /* ignora */ } }, [expandedGroups]);
+  const toggle = (id: string) => setExpandedGroups((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
   return (
     <aside className={cx('sidebar', open && 'open')} aria-label="Navegação principal">
       <Link to="/" className="brand" aria-label={appConfig.appName}>
@@ -80,13 +123,28 @@ function Sidebar({ open }: { open: boolean }) {
         <span className="brand-name">{appConfig.appName}</span>
       </Link>
       <nav className="nav">
-        {navItems.filter(item => item.to !== '/auditoria' || can('auditoria.ver')).map(({ to, label, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => cx('nav-link', isActive && 'active')} title={label}>
-            <Icon />
-            <span>{label}</span>
-            {to === '/tarefas' && mine > 0 && <em className="count">{mine}</em>}
-          </NavLink>
-        ))}
+        {navTree.map((node) => {
+          if (!isGroup(node)) return <NavLeafLink key={node.to} item={node} badge={0} />;
+          if (node.perm && !can(node.perm)) return null;
+          const items = node.items.filter((i) => !i.perm || can(i.perm));
+          const active = items.some((i) => pathname.startsWith(i.to));
+          const expanded = expandedGroups.includes(node.id);
+          const Icon = node.icon;
+          return (
+            <div key={node.id} className={cx('nav-group', expanded && 'open', active && 'has-active')}>
+              <button className="nav-link nav-group-head" aria-expanded={expanded} aria-controls={`nav-${node.id}`} onClick={() => toggle(node.id)}>
+                <Icon />
+                <span>{node.label}</span>
+                <ChevronDown className="nav-caret" size={18} />
+              </button>
+              <div className="nav-sub" id={`nav-${node.id}`}>
+                <div className="nav-sub-inner">
+                  {items.map((item) => <NavLeafLink key={item.to} item={item} badge={item.to === '/tarefas' ? mine : 0} sub tabIndex={expanded ? 0 : -1} />)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </nav>
       <button className="sidebar-user" style={{ marginTop: 'auto' }} onClick={() => nav('/configuracoes?perfil=editar')} title="Perfil e configurações">
         {me && <Avatar member={me} size={50} />}
@@ -97,6 +155,75 @@ function Sidebar({ open }: { open: boolean }) {
       </button>
     </aside>
   );
+}
+
+function NavLeafLink({ item, badge, sub, tabIndex }: { item: NavLeaf; badge: number; sub?: boolean; tabIndex?: number }) {
+  const Icon = item.icon;
+  return (
+    <NavLink to={item.to} end={item.end} tabIndex={tabIndex} className={({ isActive }) => cx('nav-link', sub && 'nav-sub-link', isActive && 'active')} title={item.label}>
+      <Icon size={sub ? 18 : undefined} />
+      <span>{item.label}</span>
+      {badge > 0 && <em className="count">{badge}</em>}
+    </NavLink>
+  );
+}
+
+const themeOrder: UserPreferences['theme'][] = ['dark', 'light', 'system'];
+const themeLabel: Record<UserPreferences['theme'], string> = { dark: 'Escuro', light: 'Claro', system: 'Seguir o sistema' };
+const themeIcon = { dark: Moon, light: Sun, system: SunMoon };
+
+/** Alternância rápida: Escuro (lua) → Claro (sol) → Sistema (sol/lua) → Escuro. */
+function ThemeToggle() {
+  const { prefs, setPrefs } = usePrefs();
+  const toast = useToast();
+  const current = prefs.theme;
+  const next = themeOrder[(themeOrder.indexOf(current) + 1) % themeOrder.length];
+  const Icon = themeIcon[current];
+  const label = `Tema: ${themeLabel[current]}. Clique para mudar para ${themeLabel[next]}.`;
+  return (
+    <button
+      className="icon-btn theme-toggle"
+      aria-label={label}
+      title={label}
+      onClick={() => setPrefs({ ...prefs, theme: next }).catch((error: Error) => toast({ tone: 'error', title: 'Não foi possível salvar o tema', description: error.message }))}
+    >
+      <Icon />
+    </button>
+  );
+}
+
+const SEEN_KEY = (id: string) => `firewalldo:notifications-seen:${id}`;
+const kindRoute: Record<AppNotification['kind'], string> = { tarefa: '/tarefas', projeto: '/projetos', noticia: '/radar', sistema: '/' };
+
+/**
+ * Busca as notificações a cada 20 s. As que chegarem e ainda não foram mostradas viram aviso flutuante.
+ * Os ids já exibidos ficam salvos por conta (evita duplicar ao recarregar ou em outra aba).
+ */
+function useNotificationFeed() {
+  const { me } = useSession();
+  const toast = useToast();
+  const nav = useNavigate();
+  const q = useQuery(() => notificationsService.list(), [], 20_000);
+  useEffect(() => {
+    if (!me || !q.data) return;
+    let seen: string[] | null = null;
+    try { const raw = localStorage.getItem(SEEN_KEY(me.id)); seen = raw ? JSON.parse(raw) : null; } catch { seen = null; }
+    const ids = q.data.map((n) => n.id);
+    if (seen === null) {
+      // Primeiro acesso neste navegador: o que já existe fica no sino, sem avisos.
+      try { localStorage.setItem(SEEN_KEY(me.id), JSON.stringify(ids.slice(0, 300))); } catch { /* ignora */ }
+      return;
+    }
+    const fresh = q.data.filter((n) => !n.read && !seen!.includes(n.id));
+    if (!fresh.length) return;
+    try { localStorage.setItem(SEEN_KEY(me.id), JSON.stringify([...fresh.map((n) => n.id), ...seen].slice(0, 300))); } catch { /* ignora */ }
+    const ordered = [...fresh].reverse();
+    ordered.slice(-4).forEach((n) =>
+      toast({ kind: n.kind, title: n.title, description: n.description, onClick: () => { void notificationsService.markRead(n.id).catch(() => {}); nav(kindRoute[n.kind]); } }),
+    );
+    if (ordered.length > 4) toast({ kind: 'sistema', title: `Mais ${ordered.length - 4} notificações`, description: 'Abra o sino para ver todas.' });
+  }, [q.data, me?.id]);
+  return q;
 }
 
 function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {
@@ -161,7 +288,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
   const close = () => setPanel(null);
   useClickOutside(notifRef, () => panel === 'notif' && close());
   useClickOutside(userRef, () => panel === 'user' && close());
-  const notifs = useQuery(() => notificationsService.list());
+  const notifs = useNotificationFeed();
   const unread = (notifs.data ?? []).filter((n) => !n.read).length;
   const nav = useNavigate();
 
@@ -173,13 +300,14 @@ function Header({ onMenu }: { onMenu: () => void }) {
       <Crumbs />
       <div className="header-actions">
         <span className="header-version" title="Versão do portal">{appConfig.version}</span>
+        <ThemeToggle />
         {!useApi() && <button className="demo-chip" onClick={() => setHelp(true)} title="Esta versão usa dados simulados" style={{ background: 'transparent' }}>
           <i /> <span className="txt">Modo demonstração</span>
         </button>}
         <div ref={notifRef} style={{ position: 'relative' }}>
           <button className="icon-btn" aria-label={`Notificações (${unread} novas)`} onClick={() => setPanel(panel === 'notif' ? null : 'notif')}>
             <Bell />
-            {unread > 0 && <i className="dot" />}
+            {unread > 0 && <i className="dot count-dot">{unread > 9 ? '9+' : unread}</i>}
           </button>
           {panel === 'notif' && (
             <div className="dropdown">
@@ -189,8 +317,9 @@ function Header({ onMenu }: { onMenu: () => void }) {
                   Marcar como lidas
                 </button>
               </div>
+              {(notifs.data ?? []).length === 0 && <div className="small muted" style={{ padding: '14px' }}>Sem notificações por enquanto.</div>}
               {(notifs.data ?? []).map((n) => (
-                <button key={n.id} className="dropdown-item" onClick={close} style={{ alignItems: 'flex-start' }}>
+                <button key={n.id} className="dropdown-item" onClick={() => { close(); if (!n.read) void notificationsService.markRead(n.id).catch(() => {}); nav(kindRoute[n.kind]); }} style={{ alignItems: 'flex-start' }}>
                   <i style={{ width: 8, height: 8, borderRadius: 99, marginTop: 7, flex: 'none', background: n.read ? 'transparent' : 'var(--primary)' }} />
                   <div className="grow">
                     <div style={{ fontWeight: 600 }}>{n.title}</div>
@@ -199,7 +328,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
                   </div>
                 </button>
               ))}
-              <div className="small muted" style={{ padding: '10px 14px' }}>Notificações da sua conta. Atualizadas ao recarregar a página.</div>
+              <div className="small muted" style={{ padding: '10px 14px' }}>Notificações da sua conta, atualizadas automaticamente.</div>
             </div>
           )}
         </div>

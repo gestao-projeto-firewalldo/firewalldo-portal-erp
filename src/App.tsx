@@ -18,6 +18,8 @@ import AuditPage from '@/pages/Audit';
 import Team from '@/pages/Team';
 import Reports from '@/pages/Reports';
 import SettingsPage from '@/pages/Settings';
+import FinanceInvestments from '@/pages/FinanceInvestments';
+import FinancePayments from '@/pages/FinancePayments';
 
 export default function App() {
   return (
@@ -42,6 +44,10 @@ export default function App() {
                   <Route path="relatorios" element={<Reports />} />
                   <Route path="auditoria" element={<AuditPage />} />
                   <Route path="configuracoes" element={<SettingsPage />} />
+                  <Route path="financeiro" element={<Navigate to="/financeiro/investimentos" replace />} />
+                  <Route path="financeiro/investimentos" element={<FinanceInvestments />} />
+                  <Route path="financeiro/pix" element={<FinancePayments kind="pix" />} />
+                  <Route path="financeiro/boletos" element={<FinancePayments kind="boleto" />} />
                   <Route
                     path="*"
                     element={

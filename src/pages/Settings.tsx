@@ -1,25 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Bug, Check, KeyRound, Pencil, Plus, RotateCcw, Save } from 'lucide-react';
-import { Avatar, Modal, Skeleton } from '@/components/ui';
+import { useSearchParams } from 'react-router-dom';
+import { Bug, Check, KeyRound, Pencil, RotateCcw, Save } from 'lucide-react';
+import { Avatar } from '@/components/ui';
 import { PushSettings } from '@/components/notifications/PushSettings';
-import { RadarSettings } from '@/components/radar/RadarSettings';
 import { MemberEditor } from '@/components/users/MemberEditor';
-import { ShortcutLogo } from '@/components/shared';
 import { usePrefs } from '@/context/PrefsContext';
 import { rolePermissions, useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
-import { useQuery } from '@/hooks/useQuery';
-import { authService, devFlags, membersService, mockDb, settingsService, uid } from '@/services';
+import { authService, devFlags, membersService, mockDb } from '@/services';
 import { cx, roleLabel } from '@/lib/labels';
 import { appConfig } from '@/config';
 import { useApi } from '@/services/core';
-import type { Permission, RadarSource, UserPreferences } from '@/types/models';
+import type { Permission, UserPreferences } from '@/types/models';
 
-type Tab = 'geral' | 'integracoes' | 'notificacoes';
+// V1.9: a aba "Integrações" saiu (a coleta automática do Radar foi descontinuada e os atalhos são editados na Visão geral).
+type Tab = 'geral' | 'notificacoes';
 const tabs: { id: Tab; label: string }[] = [
   { id: 'geral', label: 'Geral' },
-  { id: 'integracoes', label: 'Integrações' },
   { id: 'notificacoes', label: 'Notificações' },
 ];
 
@@ -32,9 +29,10 @@ const permLabels: Record<Permission, string> = {
   'usuarios.gerenciar': 'Criar e editar usuários comuns e suas senhas',
   'administradores.gerenciar': 'Gerenciar administradores e suas senhas',
   'auditoria.ver': 'Consultar auditoria',
-  'noticias.curar': 'Curar notícias do Radar',
+  'noticias.curar': 'Cadastrar, editar e excluir notícias do Radar',
   'relatorios.ver': 'Ver relatórios',
-  'configuracoes.integracoes': 'Editar fontes do radar e atalhos',
+  'configuracoes.integracoes': 'Editar os atalhos do Acesso rápido',
+  'financeiro.acessar': 'Acessar o Financeiro (usuários comuns só com autorização individual)',
 };
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -45,35 +43,25 @@ export default function SettingsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const [editingProfile, setEditingProfile] = useState(params.get('perfil') === 'editar');
-  const [tab, setTab] = useState<Tab>(() => (params.get('aba') as Tab) || 'geral');
-  const sourcesQ = useQuery(() => settingsService.radarSources());
-  const shortcutsQ = useQuery(() => settingsService.shortcuts());
+  const [tab, setTab] = useState<Tab>(() => (params.get('aba') === 'notificacoes' ? 'notificacoes' : 'geral'));
 
   // Rascunhos — só valem ao clicar em "Salvar alterações"
   const [profile, setProfile] = useState({ name: '', title: '', bio: '' });
   const [prefsDraft, setPrefsDraft] = useState<UserPreferences>(prefs);
-  const [sources, setSources] = useState<RadarSource[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [editingSource,setEditingSource]=useState<RadarSource|null>(null);
   const [forceError, setForceError] = useState(devFlags.forceError);
   const viewAs = useApi() ? me?.role : mockDb.get().viewAsRole;
-  const canIntegr = can('configuracoes.integracoes');
 
   useEffect(() => { setPrefsDraft(prefs); }, [prefs]);
   useEffect(() => {
     if (me) setProfile({ name: me.name, title: me.title, bio: me.bio ?? '' });
   }, [me?.id, me?.name, me?.title, me?.bio]);
-  useEffect(() => {
-    if (sourcesQ.data && sources === null) setSources(sourcesQ.data);
-  }, [sourcesQ.data, sources]);
 
   const dirty = useMemo(
     () =>
       (!!me && (profile.name !== me.name || profile.title !== me.title || profile.bio !== (me.bio ?? ''))) ||
-      !same(prefsDraft, prefs) ||
-      (!!sources && !!sourcesQ.data && !same(sources, sourcesQ.data)),
-    [me, profile, prefsDraft, prefs, sources, sourcesQ.data],
+      !same(prefsDraft, prefs),
+    [me, profile, prefsDraft, prefs],
   );
 
   const go = (t: Tab) => {
@@ -91,7 +79,6 @@ export default function SettingsPage() {
     try {
       if (me && !same(profile, { name: me.name, title: me.title, bio: me.bio ?? '' })) await membersService.update(me.id, profile);
       if (!same(prefsDraft, prefs)) await setPrefs(prefsDraft);
-      if (sources && canIntegr && !same(sources, sourcesQ.data)) await settingsService.saveRadarSources(sources);
       toast({ tone: 'success', title: 'Alterações salvas' });
     } catch (e) {
       toast({ tone: 'error', title: 'Não foi possível salvar', description: (e as Error).message });
@@ -274,7 +261,6 @@ export default function SettingsPage() {
                   mockDb.reset();
                   setPrefs(mockDb.get().preferences);
                   setPrefsDraft(mockDb.get().preferences);
-                  setSources(null);
                   toast({ tone: 'success', title: 'Dados restaurados' });
                 }}
               >
@@ -285,83 +271,6 @@ export default function SettingsPage() {
               {appConfig.version} · fonte de dados: {appConfig.dataSource === 'mock' ? 'simulada (mock)' : appConfig.apiBaseUrl}
             </p>
           </section>}
-        </div>
-      )}
-
-      {/* ===================== INTEGRAÇÕES ===================== */}
-      {tab === 'integracoes' && (
-        <div className="settings-stack">
-          <section className="card settings-section">
-            <div className="section-head">
-              <div>
-                <h2>Fontes do radar</h2>
-                <p>Os sites das fontes ativas delimitam a pesquisa automática e ficam disponíveis para publicação manual.</p>
-              </div>
-              {canIntegr && (
-                <button className="btn outline-primary" onClick={() => setAdding(true)}>
-                  <Plus /> Adicionar fonte
-                </button>
-              )}
-            </div>
-            {!sources ? (
-              <Skeleton h={210} />
-            ) : (
-              <div className="boxed-list">
-                {sources.map((s) => (
-                  <div key={s.id} className="source-row">
-                    <span className="source-logo">{s.short}</span>
-                    <div className="grow source-info">
-                      <b>{s.name}</b>
-                      <div className="muted">{s.description}</div><a className="small" href={s.url} target="_blank" rel="noreferrer">{s.url}</a>
-                    </div>
-                    <div className="source-controls">
-                    <button className="btn icon source-edit" disabled={!canIntegr} aria-label={`Editar fonte ${s.name}`} onClick={()=>setEditingSource(s)}><Pencil /></button>
-                    <span className={cx('state-pill', s.active ? 'on' : 'off')}>
-                      <i /> {s.active ? 'Ativa' : 'Pausada'}
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="switch lg source-toggle"
-                      checked={s.active}
-                      disabled={!canIntegr}
-                      onChange={(e) => setSources(sources.map((x) => (x.id === s.id ? { ...x, active: e.target.checked } : x)))}
-                      aria-label={`${s.active ? 'Pausar' : 'Ativar'} ${s.name}`}
-                    />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="muted small" style={{ marginTop: 12 }}>
-              {useApi() ? 'Somente notícias de fontes ativas aparecem no Radar.' : 'O Radar usa notícias de demonstração.'}
-            </p>
-          </section>
-
-          <RadarSettings disabled={!canIntegr} />
-          <section className="card settings-section">
-            <div className="section-head">
-              <div>
-                <h2>Atalhos da equipe</h2>
-                <p>Gerencie os links rápidos usados pela equipe no dia a dia.</p>
-              </div>
-            </div>
-            {!shortcutsQ.data ? (
-              <Skeleton h={300} />
-            ) : (
-              <div className="shortcut-list">
-                {shortcutsQ.data.map((s) => (
-                  <div key={s.id} className="shortcut-row readonly">
-                    <span className="sc-icon"><ShortcutLogo item={s} /></span>
-                    <b className="sc-label">{s.label}</b>
-                    <input className="input" value={s.url} readOnly placeholder="Link não configurado" aria-label={`Link de ${s.label}`} />
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="muted small" style={{ marginTop: 12 }}>
-              Para adicionar, editar, trocar a logo ou remover atalhos, use <Link to="/">Visão geral → Acesso rápido → Editar</Link>.
-            </p>
-          </section>
         </div>
       )}
 
@@ -395,62 +304,6 @@ export default function SettingsPage() {
 
       {editingProfile && me && <MemberEditor member={me} onClose={() => { setEditingProfile(false); params.delete('perfil'); setParams(params, { replace: true }); }} />}
 
-      {editingSource && sources && <AddSourceModal source={editingSource} onClose={()=>setEditingSource(null)} onAdd={source=>{setSources(sources.map(s=>s.id===source.id?source:s));setEditingSource(null);toast({tone:'info',title:'Fonte alterada',description:'Clique em Salvar alterações para confirmar.'});}} />}
-      {adding && sources && (
-        <AddSourceModal
-          onClose={() => setAdding(false)}
-          onAdd={(src) => {
-            setSources([...sources, src]);
-            setAdding(false);
-            toast({ tone: 'info', title: 'Fonte adicionada', description: 'Clique em “Salvar alterações” para confirmar.' });
-          }}
-        />
-      )}
     </div>
-  );
-}
-
-function AddSourceModal({ source, onClose, onAdd }: { source?:RadarSource; onClose: () => void; onAdd: (s: RadarSource) => void }) {
-  const [name, setName] = useState(source?.name ?? '');
-  const [url, setUrl] = useState(source?.url ?? '');
-  const [description, setDescription] = useState(source?.description ?? '');
-  const [err, setErr] = useState('');
-  const submit = () => {
-    if (name.trim().length < 2) return setErr('Informe o nome da fonte.');
-    if (!/^https?:\/\//i.test(url.trim())) return setErr('Informe o site da fonte começando com https://');
-    const short = name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
-    onAdd({ id: source?.id ?? uid('src'), name: name.trim(), url: url.trim(), description: description.trim(), short, active: source?.active ?? true });
-  };
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={source ? "Editar fonte" : "Adicionar fonte"}
-      error={err}
-      subtitle="Informe o site da fonte. A pesquisa automática é limitada ao domínio e aos subdomínios desse endereço."
-      width={540}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn primary" onClick={submit}><Plus /> {source ? 'Concluir edição' : 'Adicionar'}</button>
-        </>
-      }
-    >
-      <div className="form-grid">
-        <div className="field full">
-          <label htmlFor="s-n">Nome *</label>
-          <input id="s-n" className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="field full">
-          <label htmlFor="s-u">Site da fonte *</label>
-          <input id="s-u" className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" />
-        </div>
-        <div className="field full">
-          <label htmlFor="s-d">Descrição</label>
-          <input id="s-d" className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        {err && <div className="full small" style={{ color: 'var(--danger)' }}>{err}</div>}
-      </div>
-    </Modal>
   );
 }

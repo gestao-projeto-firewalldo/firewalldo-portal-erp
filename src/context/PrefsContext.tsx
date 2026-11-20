@@ -38,11 +38,20 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', apply);
   }, [prefs.theme, prefs.reducedMotion]);
 
+  /** Aplica na hora (tema muda imediatamente) e salva na conta; se falhar, volta ao valor anterior. */
   const setPrefs = async (p: UserPreferences) => {
     if (useApi() && !account.current) throw new Error('Entre na sua conta para salvar as preferências.');
     const currentAccount = account.current;
-    const saved = await preferencesService.save(p);
-    if (account.current === currentAccount) setState(saved);
+    const previous = prefs;
+    const version = ++loadVersion.current;
+    setState(p);
+    try {
+      const saved = await preferencesService.save(p);
+      if (account.current === currentAccount && loadVersion.current === version) setState(saved);
+    } catch (error) {
+      if (account.current === currentAccount && loadVersion.current === version) setState(previous);
+      throw error;
+    }
   };
 
   return <Ctx.Provider value={{ prefs, setPrefs }}>{children}</Ctx.Provider>;

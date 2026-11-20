@@ -18,8 +18,9 @@ import {
   ThumbsUp,
   Video,
   Archive,
+  Trash2,
 } from 'lucide-react';
-import { Async, Avatar, EmptyState, Modal, SearchInput, Skeleton } from '@/components/ui';
+import { Async, Avatar, ConfirmDialog, EmptyState, Modal, SearchInput, Skeleton } from '@/components/ui';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
@@ -130,6 +131,7 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
   const openTask = useTaskEditor();
   const toast = useToast();
   const [menu, setMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -143,6 +145,17 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
 
   return (
     <article className={cx('card idea-card', idea.status === 'arquivada' && 'archived')}>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Excluir ideia"
+          message="Deseja excluir permanentemente esta ideia? Esta ação não poderá ser desfeita."
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={async () => {
+            await ideasService.remove(idea.id);
+            toast({ tone: 'success', title: 'Ideia excluída', description: idea.title });
+          }}
+        />
+      )}
       <div className="idea-cover" style={{ '--c': ideaCategoryColor[idea.category] } as CSSProperties}>
         <CatIcon />
         <span className={cx('idea-status', idea.status)}>
@@ -156,7 +169,7 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
             {menu && (
               <div className="dropdown" style={{ width: 220 }}>
                 <div className="dropdown-head" style={{ fontSize: 13 }}>Alterar status</div>
-                {(['nova', 'em_analise', 'aprovada', 'arquivada'] as IdeaStatus[]).map((s) => (
+                {(['nova', 'em_analise', 'aprovada'] as IdeaStatus[]).map((s) => (
                   <button
                     key={s}
                     className="dropdown-item"
@@ -180,6 +193,10 @@ function IdeaCard({ idea, author, authorName }: { idea: Idea; author?: ReturnTyp
                     <ArrowUpRight size={16} /> Transformar em tarefa
                   </button>
                 )}
+                <div className="dropdown-sep" />
+                <button className="dropdown-item idea-delete" onClick={() => { setMenu(false); setConfirmDelete(true); }}>
+                  <Trash2 size={16} /> Excluir
+                </button>
               </div>
             )}
           </div>

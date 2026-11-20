@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Save, UserRound } from 'lucide-react';
+import { Save, UserRound, Wallet } from 'lucide-react';
+import { ProfilePhoto } from '@/components/users/ProfilePhoto';
 import { Modal } from '@/components/ui';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { useSession } from '@/context/SessionContext';
@@ -18,11 +19,15 @@ const areas: { id: Category; label: string }[] = [
 ];
 
 export function MemberEditor({ member, onClose }: { member?: Member; onClose: () => void }) {
-  const { me } = useSession();
+  const { me, membersById } = useSession();
+  const live = member ? membersById[member.id] ?? (member.id === me?.id ? me : member) : undefined;
   const toast = useToast();
   const self = !!member && member.id === me?.id;
   const general = me?.role === 'superadmin';
   const [form, setForm] = useState({ name: member?.name ?? '', email: member?.email ?? '', title: member?.title ?? '', bio: member?.bio ?? '', role: member?.role ?? 'usuario' as Role, areas: member?.areas ?? [] as Category[] });
+  const [financeAccess, setFinanceAccess] = useState(!!member?.financeAccess);
+  // Administradores concedem acesso ao Financeiro para usuários comuns (nunca a si mesmos).
+  const canGrantFinance = !!member && !self && (me?.role === 'superadmin' || me?.role === 'admin') && form.role === 'usuario';
   const [senha, setSenha] = useState('');
   const [confirmacao, setConfirmacao] = useState('');
   const [senhaAtual, setSenhaAtual] = useState('');
@@ -47,6 +52,7 @@ export function MemberEditor({ member, onClose }: { member?: Member; onClose: ()
       if (member) {
         const { role, ...base } = profile;
         await membersService.update(member.id, { ...base, ...(general ? { role } : {}),
+          ...(canGrantFinance && financeAccess !== !!member.financeAccess ? { financeAccess } : {}),
           ...(senha ? { senha, confirmacaoSenha: confirmacao } : {}), ...(sensitive ? { senhaAtual } : {}) });
       } else await membersService.create({ ...profile, senha });
       toast({ tone: 'success', title: member ? 'Perfil atualizado' : 'Usuário criado', description: member ? 'As alterações já estão disponíveis.' : 'A conta já pode entrar com o e-mail e a senha cadastrados.' });
@@ -60,6 +66,7 @@ export function MemberEditor({ member, onClose }: { member?: Member; onClose: ()
     icon={<span className="icon-tile"><UserRound /></span>} width={620}
     footer={<><button className="btn" onClick={onClose} disabled={saving}>Cancelar</button><button className="btn primary" onClick={save} disabled={saving}><Save /> {saving ? 'Salvando…' : member ? 'Salvar alterações' : 'Criar usuário'}</button></>}>
     <form noValidate className="form-grid" onSubmit={e => { e.preventDefault(); void save(); }}>
+      {live && <ProfilePhoto member={live} />}
       <div className="field full"><label htmlFor="member-name">Nome *</label><input id="member-name" aria-invalid={invalidField === 'member-name'} className="input" autoFocus maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
       <div className="field full"><label htmlFor="member-email">E-mail *</label><input id="member-email" aria-invalid={invalidField === 'member-email'} className="input" type="email" autoComplete="off" maxLength={254} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
       <div className="field"><label htmlFor="member-role">Perfil</label><select id="member-role" className="select" value={form.role} disabled={!general} onChange={e => setForm({ ...form, role: e.target.value as Role })}>
@@ -70,6 +77,7 @@ export function MemberEditor({ member, onClose }: { member?: Member; onClose: ()
       {member && <div className="field full"><label htmlFor="member-confirm">Confirmar nova senha</label><PasswordInput id="member-confirm" aria-invalid={invalidField === 'member-confirm'} autoComplete="new-password" maxLength={128} value={confirmacao} onChange={e => setConfirmacao(e.target.value)} /></div>}
       {sensitive && <div className="field full"><label htmlFor="member-current">Sua senha atual *</label><PasswordInput id="member-current" aria-invalid={invalidField === 'member-current'} autoComplete="current-password" maxLength={128} value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} /><span className="muted small">Confirma a alteração do seu e-mail ou senha.</span></div>}
       <fieldset className="field full area-options"><legend>Áreas de atuação</legend><div className="row" style={{ flexWrap: 'wrap' }}>{areas.map(a => <label key={a.id}><input type="checkbox" checked={form.areas.includes(a.id)} onChange={e => setForm({ ...form, areas: e.target.checked ? [...form.areas, a.id] : form.areas.filter(id => id !== a.id) })} /> {a.label}</label>)}</div></fieldset>
+      {canGrantFinance && <label className="field full finance-grant"><input type="checkbox" checked={financeAccess} onChange={e => setFinanceAccess(e.target.checked)} /> <Wallet size={18} /> <span><b>Acesso ao Financeiro</b><span className="muted small" style={{ display: 'block' }}>Permite ver e editar investimentos, Pix e boletos.</span></span></label>}
       <div className="field full"><label htmlFor="member-bio">Bio</label><textarea id="member-bio" className="textarea" maxLength={2000} value={form.bio} onChange={e => setForm({ ...form, bio: e.target.value })} /></div>
       <button type="submit" hidden disabled={saving}>Salvar</button>
     </form>

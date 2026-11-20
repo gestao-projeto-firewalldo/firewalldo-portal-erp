@@ -336,3 +336,50 @@ export function PageHead({
     </div>
   );
 }
+
+/* ---------------- Confirmação (V1.9) ---------------- */
+
+/** Diálogo de confirmação para ações destrutivas. `onConfirm` pode ser assíncrono. */
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = 'Excluir',
+  danger = true,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  danger?: boolean;
+  onConfirm: () => Promise<void> | void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async () => {
+    setBusy(true); setError('');
+    try { await onConfirm(); onClose(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal
+      open
+      onClose={() => !busy && onClose()}
+      title={title}
+      width={460}
+      error={error}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className={cx('btn', danger ? 'danger-solid' : 'primary')} onClick={() => void run()} disabled={busy} autoFocus>
+            {busy ? 'Aguarde…' : confirmLabel}
+          </button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>{message}</p>
+    </Modal>
+  );
+}

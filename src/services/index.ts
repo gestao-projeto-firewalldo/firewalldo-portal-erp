@@ -8,6 +8,7 @@
  * As regras de negócio aplicadas aqui no mock (ex.: limite de vagas) devem ser
  * replicadas/validadas no servidor — o front não é fonte de verdade.
  */
+import { appConfig } from '@/config';
 import { http, mockDb, simulate, today, uid, useApi, ServiceError } from './core';
 import type {
   AppNotification,
@@ -19,9 +20,16 @@ import type {
   LibraryFolder,
   Member,
   MemberInput,
+  FinanceSummary,
+  Investment,
+  InvestmentInput,
+  NewsInput,
   NewsItem,
+  NewsSlot,
+  Payment,
+  PaymentInput,
+  PaymentKind,
   Project,
-  RadarSource,
   Role,
   Shortcut,
   ShortcutInput,
@@ -87,7 +95,7 @@ export const membersService = {
     return simulate(() => m);
   },
   /** API: PATCH /users/:id */
-  async update(id: string, patch: Partial<Pick<Member, 'name' | 'email' | 'title' | 'bio' | 'role' | 'active' | 'areas'>> & { senha?: string; confirmacaoSenha?: string; senhaAtual?: string }): Promise<Member> {
+  async update(id: string, patch: Partial<Pick<Member, 'name' | 'email' | 'title' | 'bio' | 'role' | 'active' | 'areas' | 'financeAccess'>> & { senha?: string; confirmacaoSenha?: string; senhaAtual?: string }): Promise<Member> {
     if (useApi()) return http.patch(`/users/${id}`, patch);
     mockDb.update((d) => {
       const m = d.members.find((x) => x.id === id);
@@ -96,6 +104,20 @@ export const membersService = {
       Object.assign(m, profile);
       if (patch.name) m.initials = initialsOf(patch.name);
     });
+    return simulate(() => db().members.find((x) => x.id === id)!);
+  },
+};
+
+/** Foto de perfil (V1.9). API: PUT/DELETE /users/:id/photo */
+export const photoService = {
+  async save(id: string, image: string): Promise<Member> {
+    if (useApi()) return http.request(`/users/${id}/photo`, { method: 'PUT', body: JSON.stringify({ image }) });
+    mockDb.update((d) => { const m = d.members.find((x) => x.id === id); if (m) m.avatarUrl = image; });
+    return simulate(() => db().members.find((x) => x.id === id)!);
+  },
+  async remove(id: string): Promise<Member> {
+    if (useApi()) return http.del(`/users/${id}/photo`);
+    mockDb.update((d) => { const m = d.members.find((x) => x.id === id); if (m) m.avatarUrl = null; });
     return simulate(() => db().members.find((x) => x.id === id)!);
   },
 };
@@ -288,24 +310,53 @@ export const libraryService = {
 
 /* ================= Radar de notícias ================= */
 
+export const NEWS_LIMITS: Record<NewsSlot, number> = { principal: 1, secundaria: 3, geral: 5 };
+const slotOrder: Record<NewsSlot, number> = { principal: 0, secundaria: 1, geral: 2 };
+const sortNews = (list: NewsItem[]) =>
+  [...list].sort((a, b) => slotOrder[a.slot ?? 'geral'] - slotOrder[b.slot ?? 'geral'] || b.publishedAt.localeCompare(a.publishedAt));
+
+/** Radar manual (V1.9): até 9 notícias, limites conferidos também no servidor. */
 export const newsService = {
-  /** API: GET /news, publicações de fontes ativas. */
-  async list(drafts = false): Promise<NewsItem[]> {
-    if (useApi()) return http.get(`/news${drafts ? '?drafts=true' : ''}`);
-    return simulate(() => db().news);
+  /** API: GET /news (principal, secundárias e gerais publicadas). */
+  async list(): Promise<NewsItem[]> {
+    if (useApi()) return http.get('/news');
+    return simulate(() => sortNews(db().news.filter((n) => n.slot)));
   },
-  /** API: GET /news/saved  → string[] de ids */
-  async savedIds(): Promise<string[]> {
-    if (useApi()) return http.get('/news/saved');
-    return simulate(() => db().savedNewsIds);
+  /** API: POST /news */
+  async create(input: NewsInput): Promise<NewsItem> {
+    if (useApi()) return http.post('/news', input);
+    const used = db().news.filter((n) => n.slot === input.slot).length;
+    if (used >= NEWS_LIMITS[input.slot]) throw new ServiceError('Não há vaga disponível nesta categoria.', 'CONFLICT');
+    const item: NewsItem = {
+      id: uid('n'), title: input.title, summary: input.summary, body: input.body.split(/\n\s*\n|\n/).filter((p) => p.trim()),
+      slot: input.slot, source: input.sourceName ?? '', url: input.sourceUrl ?? '', imageUrl: input.image || undefined,
+      publishedAt: input.publishedAt ?? today(), readMinutes: 1, featured: input.slot === 'principal', category: 'ciberseguranca', cover: 'lock', isDemo: true,
+    };
+    mockDb.update((d) => { d.news.unshift(item); });
+    return simulate(() => item);
   },
-  /** Alterna "salvar". API: POST /news/:id/save  → string[] atualizado */
-  async toggleSave(id: string): Promise<string[]> {
-    if (useApi()) return http.post(`/news/${id}/save`, {});
+  /** API: PATCH /news/:id */
+  async update(id: string, input: Partial<NewsInput>): Promise<NewsItem> {
+    if (useApi()) return http.patch(`/news/${id}`, input);
     mockDb.update((d) => {
-      d.savedNewsIds = d.savedNewsIds.includes(id) ? d.savedNewsIds.filter((x) => x !== id) : [...d.savedNewsIds, id];
+      const n = d.news.find((x) => x.id === id);
+      if (!n) return;
+      if (input.title !== undefined) n.title = input.title;
+      if (input.summary !== undefined) n.summary = input.summary;
+      if (input.body !== undefined) n.body = input.body.split(/\n\s*\n|\n/).filter((p) => p.trim());
+      if (input.slot) { n.slot = input.slot; n.featured = input.slot === 'principal'; }
+      if (input.image !== undefined) n.imageUrl = input.image || undefined;
+      if (input.sourceName !== undefined) n.source = input.sourceName;
+      if (input.sourceUrl !== undefined) n.url = input.sourceUrl;
+      if (input.publishedAt) n.publishedAt = input.publishedAt;
     });
-    return simulate(() => db().savedNewsIds);
+    return simulate(() => db().news.find((x) => x.id === id)!);
+  },
+  /** API: DELETE /news/:id */
+  async remove(id: string): Promise<void> {
+    if (useApi()) { await http.del(`/news/${id}`); return; }
+    mockDb.update((d) => { d.news = d.news.filter((n) => n.id !== id); });
+    return simulate(() => undefined);
   },
 };
 
@@ -335,6 +386,12 @@ export const ideasService = {
     });
     return simulate(() => undefined);
   },
+  /** Exclusão definitiva (V1.9). API: DELETE /ideas/:id */
+  async remove(id: string): Promise<void> {
+    if (useApi()) { await http.del(`/ideas/${id}`); return; }
+    mockDb.update((d) => { d.ideas = d.ideas.filter((i) => i.id !== id); });
+    return simulate(() => undefined);
+  },
   /** "Gostei" (um por usuário). API: POST /ideas/:id/vote  (alternar) */
   async toggleVote(id: string): Promise<void> {
     if (useApi()) return http.post(`/ideas/${id}/vote`, {});
@@ -356,6 +413,12 @@ export const notificationsService = {
     if (useApi()) return http.get('/notifications');
     return simulate(() => db().notifications);
   },
+  /** API: POST /notifications/:id/read */
+  async markRead(id: string): Promise<void> {
+    if (useApi()) { await http.post(`/notifications/${id}/read`, {}); return; }
+    mockDb.update((d) => { const n = d.notifications.find((x) => x.id === id); if (n) n.read = true; });
+    return simulate(() => undefined);
+  },
   /** API: POST /notifications/read-all */
   async markAllRead(): Promise<void> {
     if (useApi()) return http.post('/notifications/read-all', {});
@@ -369,19 +432,6 @@ export const notificationsService = {
 /* ================= Configurações (integrações) ================= */
 
 export const settingsService = {
-  /** API: GET /settings/radar-sources */
-  async radarSources(): Promise<RadarSource[]> {
-    if (useApi()) return http.get('/settings/radar-sources');
-    return simulate(() => db().radarSources);
-  },
-  /** Salva a lista inteira (ativar/pausar, adicionar). API: PUT /settings/radar-sources */
-  async saveRadarSources(list: RadarSource[]): Promise<RadarSource[]> {
-    if (useApi()) return http.request('/settings/radar-sources', { method: 'PUT', body: JSON.stringify(list) });
-    mockDb.update((d) => {
-      d.radarSources = list;
-    });
-    return simulate(() => db().radarSources);
-  },
   /** Atalhos do "Acesso rápido". API: GET /settings/shortcuts */
   async shortcuts(): Promise<Shortcut[]> {
     if (useApi()) return http.get('/settings/shortcuts');
@@ -445,4 +495,31 @@ export const agendaService = {
   update: (id: string, input: import('@/types/models').ScheduleInput) => http.request<import('@/types/models').TaskSchedule>(`/agenda/${id}`, {method:'PUT',body:JSON.stringify(input)}),
   active: (id: string, active: boolean) => http.patch(`/agenda/${id}/active`,{active}),
   remove: (id: string) => http.del(`/agenda/${id}`),
+};
+
+/* ================= Financeiro (V1.9) ================= */
+
+const financeOnlyApi = () => Promise.reject(new ServiceError('O Financeiro funciona somente conectado à API (dados reais).', 'UNAVAILABLE'));
+
+export const financeService = {
+  /** API: GET /finance/summary */
+  summary(): Promise<FinanceSummary> { return useApi() ? http.get('/finance/summary') : financeOnlyApi(); },
+  /** API: GET /finance/investments */
+  investments(): Promise<Investment[]> { return useApi() ? http.get('/finance/investments') : financeOnlyApi(); },
+  /** Histórico de cobranças de um investimento. API: GET /finance/investments/:id/payments */
+  investmentPayments(id: string): Promise<Payment[]> { return useApi() ? http.get(`/finance/investments/${id}/payments`) : financeOnlyApi(); },
+  createInvestment(input: InvestmentInput): Promise<Investment> { return useApi() ? http.post('/finance/investments', input) : financeOnlyApi(); },
+  updateInvestment(id: string, input: InvestmentInput): Promise<Investment> { return useApi() ? http.patch(`/finance/investments/${id}`, input) : financeOnlyApi(); },
+  async removeInvestment(id: string): Promise<void> { if (!useApi()) return financeOnlyApi(); await http.del(`/finance/investments/${id}`); },
+  /** API: GET /finance/payments?kind=pix|boleto */
+  payments(kind: PaymentKind): Promise<Payment[]> { return useApi() ? http.get(`/finance/payments?kind=${kind}`) : financeOnlyApi(); },
+  createPayment(input: PaymentInput): Promise<Payment> { return useApi() ? http.post('/finance/payments', input) : financeOnlyApi(); },
+  updatePayment(id: string, input: PaymentInput): Promise<Payment> { return useApi() ? http.patch(`/finance/payments/${id}`, input) : financeOnlyApi(); },
+  /** Marca como pago (manual, após confirmação). API: POST /finance/payments/:id/pay */
+  pay(id: string, paidAt: string, receipt?: { data: string; name: string }): Promise<Payment> {
+    return useApi() ? http.post(`/finance/payments/${id}/pay`, { paidAt, ...(receipt ? { receipt: receipt.data, receiptName: receipt.name } : {}) }) : financeOnlyApi();
+  },
+  async removePayment(id: string): Promise<void> { if (!useApi()) return financeOnlyApi(); await http.del(`/finance/payments/${id}`); },
+  /** Abre o anexo/comprovante numa nova aba (a sessão vai pelo cookie). */
+  fileUrl(id: string, which: 'attachment' | 'receipt') { return `${appConfig.apiBaseUrl}/finance/payments/${id}/${which}`; },
 };

@@ -105,3 +105,11 @@ Campos: title, description, projectId (nullable), category, priority, assigneeId
 A API cria uma tarefa por pessoa ativa a cada abertura; próximos horários são somente prévias. Cada cópia tem scheduleId e scheduledFor para rastreio.
 GET /tasks restringe usuário às próprias tarefas. Filtro assigneeId de outra conta é 403 para usuário; admin/superadmin consultam todos ou um responsável.
 Todas as tarefas retornam ticketNumber: inteiro global e imutável, atribuído pelo banco ao criar; exibir como ticket01/ticket02/.../ticket405. Não enviar esse campo em PATCH. Regras não recebem ticket antes da liberação. Tarefas removidas não têm número reutilizado.
+
+V1.9
+- Radar manual: GET/POST /api/news, PATCH/DELETE /api/news/:id, GET /api/news/:id/image. Limites 1 principal, 3 secundárias, 5 gerais.
+- Ideias: DELETE /api/ideas/:id (exclusão definitiva).
+- Foto de perfil: PUT/DELETE/GET /api/users/:id/photo. Campo avatarUrl em /users e /auth/me.
+- Notificações: POST /api/notifications/:id/read; o front consulta /api/notifications a cada 20 s e mostra avisos flutuantes.
+- Financeiro: /api/finance/summary, /api/finance/investments, /api/finance/payments (kind=pix|boleto), /pay, /attachment, /receipt.
+- Removidos: /api/settings/radar*, /api/settings/radar-sources, /api/news/saved, /api/news/:id/save, /api/news/:id/publish.

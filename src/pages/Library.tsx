@@ -103,7 +103,7 @@ export default function Library() {
           <p>{useApi() ? 'Arquivos compartilhados com a equipe.' : 'Central de arquivos de demonstração.'}</p>
         </div>
         <div className="actions">
-          {driveUrl ? <a className="btn outline" href={driveUrl} target="_blank" rel="noreferrer"><HardDrive /> Abrir Drive</a> : <Link className="btn outline" to="/configuracoes?aba=integracoes"><HardDrive /> Configurar Drive</Link>}
+          {driveUrl ? <a className="btn outline" href={driveUrl} target="_blank" rel="noreferrer"><HardDrive /> Abrir Drive</a> : <Link className="btn outline" to="/"><HardDrive /> Configurar Drive</Link>}
           {can('biblioteca.enviar') && (
             <button className="btn primary" onClick={() => setUpload(true)}>
               <Upload /> Enviar arquivo

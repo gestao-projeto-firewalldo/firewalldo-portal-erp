@@ -7,7 +7,7 @@ import type { Member, Permission, Project, Role } from '@/types/models';
 const adminPermissions: Permission[] = [
   'tarefas.criar', 'tarefas.editar_todas', 'tarefas.aceitar', 'projetos.gerenciar',
   'biblioteca.enviar', 'usuarios.gerenciar', 'noticias.curar', 'relatorios.ver',
-  'configuracoes.integracoes', 'auditoria.ver',
+  'configuracoes.integracoes', 'auditoria.ver', 'financeiro.acessar',
 ];
 export const rolePermissions: Record<Role, Permission[]> = {
   superadmin: [...adminPermissions, 'administradores.gerenciar'],
@@ -54,7 +54,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       membersById: Object.fromEntries(ms.map((m) => [m.id, m])),
       projects: ps,
       projectsById: Object.fromEntries(ps.map((p) => [p.id, p])),
-      can: (p) => rolePermissions[role].includes(p),
+      // Financeiro: administradores ou usuários com acesso individual concedido (financeAccess).
+      can: (p) => rolePermissions[role].includes(p) || (p === 'financeiro.acessar' && !!me.data?.financeAccess),
       loading: me.loading || members.loading || projects.loading,
       error: me.error || members.error || projects.error,
     };
