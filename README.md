@@ -53,3 +53,8 @@ Regras persistentes diárias/a cada N dias, semanais e por datas selecionadas. A
 ## Portal 1.1.12 — Agenda e Backlog
 
 O editor da Agenda oferece coluna de entrada Backlog/A fazer e número de vagas necessárias para iniciar. No Backlog, os vinculados são candidatos e podem exceder as vagas; sem seleção, qualquer conta ativa pode aceitar. Em A fazer, todos os vinculados recebem uma única tarefa compartilhada. O Kanban mostra os candidatos com fotos e nomes separados dos aceites. A mesma regra vale para tarefas normais, recorrentes, semanais e por datas. Próximas aberturas seguem a regra editada; tarefas antigas são preservadas.
+
+
+## Portal 1.1.13 — finalizar e consultar histórico
+
+Somente o administrador principal vê Finalizar nas tarefas concluídas. Após confirmação, saem do Kanban e aparecem resumidas no histórico do projeto; clicar abre os dados em modo de consulta. Relatórios agora aparece no menu Gestão para administradores, com Histórico de ações, Tarefas finalizadas e Indicadores. Filtros permitem identificar a autoria de notícias, tarefas, projetos e demais ações auditadas, mesmo após exclusões, com detalhes e exportação CSV. O histórico usa dados persistidos da auditoria; registros antigos podem ter detalhes limitados.

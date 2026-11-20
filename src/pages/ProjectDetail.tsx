@@ -12,11 +12,12 @@ import { useQuery } from '@/hooks/useQuery';
 import { projectsService, tasksService } from '@/services';
 import { categoryLabel, cx, longDate, projectStatusLabel, shortDate, statusColor, statusLabel, statusOrder , ticketLabel } from '@/lib/labels';
 import { projectProgress } from '@/lib/progress';
+import { TaskArchive } from '@/components/tasks/TaskArchive';
 
 export default function ProjectDetail() {
   const { id = '' } = useParams();
   const q = useQuery(() => projectsService.get(id), [id]);
-  const tasksQ = useQuery(() => tasksService.list());
+  const tasksQ = useQuery(() => tasksService.list(true));
   const { membersById, can } = useSession();
   const openTask = useTaskEditor();
   const [editing,setEditing] = useState(false);
@@ -84,12 +85,12 @@ export default function ProjectDetail() {
                   </div>
                   {tasksQ.loading && !tasksQ.data ? (
                     <div style={{ padding: '0 22px 20px' }}><Skeleton h={200} /></div>
-                  ) : linked.length === 0 ? (
-                    <EmptyState title="Nenhuma tarefa neste projeto" description={can('tarefas.criar') ? 'Use “Criar tarefa” para começar.' : undefined} />
+                  ) : linked.filter(t=>!t.finalizedAt).length === 0 ? (
+                    <EmptyState title="Nenhuma tarefa ativa neste projeto" description={linked.length?'Consulte as tarefas finalizadas no histórico.':can('tarefas.criar') ? 'Use “Criar tarefa” para começar.' : undefined} />
                   ) : (
                     <div className="linked">
                       {statusOrder.map((s) => {
-                        const items = linked.filter((t) => t.status === s).sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+                        const items = linked.filter((t) => !t.finalizedAt && t.status === s).sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
                         if (!items.length) return null;
                         return (
                           <div key={s} className="linked-group" style={{ '--c': statusColor[s] } as CSSProperties}>
@@ -126,6 +127,7 @@ export default function ProjectDetail() {
                 </section>
 
                 <div style={{ display: 'grid', gap: 20 }}>
+                  <TaskArchive tasks={linked.filter(t=>!!t.finalizedAt)}/>
                   <section className="card">
                     <div className="card-head">
                       <Users size={26} />

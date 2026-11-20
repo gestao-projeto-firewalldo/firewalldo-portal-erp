@@ -175,6 +175,7 @@ export const projectsService = {
 /* ================= Tarefas ================= */
 function validateMockTransition(task: Task, status: TaskStatus) {
   const state = db();
+  if(task.finalizedAt)throw new ServiceError('Tarefa finalizada: somente consulta.','FINALIZED');
   if (!canMoveTask(task, { id: state.currentUserId, role: state.viewAsRole })) throw new ServiceError('Você só pode mover tarefas em que é responsável.', 'FORBIDDEN');
   if (status !== task.status && !taskSteps(task.status).some(step => step.status === status)) throw new ServiceError('Use a próxima etapa ou a anterior. No Backlog, use Aceitar tarefa.', 'INVALID_INPUT');
 }
@@ -182,9 +183,17 @@ function validateMockTransition(task: Task, status: TaskStatus) {
 
 export const tasksService = {
   /** API: GET /tasks   (filtros opcionais: ?projectId=&assigneeId=&status=) */
-  async list(): Promise<Task[]> {
-    if (useApi()) return http.get('/tasks');
-    return simulate(() => [...db().tasks].filter(task => db().viewAsRole !== 'usuario' || task.assigneeIds.includes(db().currentUserId) || (task.status==='backlog' && task.open && isEligible(task,db().currentUserId))).sort((a, b) => a.order - b.order));
+  async list(includeFinalized = false): Promise<Task[]> {
+    if (useApi()) return http.get(`/tasks${includeFinalized?'?includeFinalized=true':''}`);
+    return simulate(() => [...db().tasks].filter(task=>includeFinalized||!task.finalizedAt).filter(task => db().viewAsRole !== 'usuario' || task.assigneeIds.includes(db().currentUserId) || (task.status==='backlog' && task.open && isEligible(task,db().currentUserId))).sort((a, b) => a.order - b.order));
+  },
+  async finalize(id:string):Promise<Task>{
+    if(useApi())return http.post(`/tasks/${id}/finalize`,{});
+    const state=db(),task=state.tasks.find(t=>t.id===id);
+    if(state.viewAsRole!=='superadmin')throw new ServiceError('Somente o administrador principal pode finalizar.','FORBIDDEN');
+    if(!task||task.status!=='concluido')throw new ServiceError('Conclua a tarefa antes de finalizar.','INVALID_INPUT');
+    if(!task.finalizedAt)mockDb.update(d=>Object.assign(d.tasks.find(t=>t.id===id)!,{finalizedAt:new Date().toISOString(),finalizedBy:state.currentUserId,finalizedByName:state.members.find(m=>m.id===state.currentUserId)?.name,finalizedProjectName:state.projects.find(p=>p.id===task.projectId)?.name}));
+    return simulate(()=>db().tasks.find(t=>t.id===id)!);
   },
   /** Criar tarefa (admin, dentro de um projeto). API: POST /tasks */
   async create(input: TaskInput): Promise<Task> {
@@ -211,6 +220,7 @@ export const tasksService = {
   async update(id: string, patch: Partial<Task>): Promise<Task> {
     if (useApi()) return http.patch(`/tasks/${id}`, patch);
     const current = db().tasks.find(t => t.id === id);
+    if(current?.finalizedAt)throw new ServiceError('Tarefa finalizada: somente consulta.','FINALIZED');
     if (current && patch.status && patch.status !== current.status) validateMockTransition(current, patch.status);
     if (current?.status==='backlog' && patch.assigneeIds && JSON.stringify(patch.assigneeIds)!==JSON.stringify(current.assigneeIds)) throw new ServiceError('Os responsáveis do Backlog são definidos pelos aceites.', 'INVALID_INPUT');
     if (current && current.assigneeIds.length>(patch.maxAssignees??current.maxAssignees)) throw new ServiceError('O limite não pode ser menor que o número de aceites confirmados.','INVALID_INPUT');
@@ -228,6 +238,7 @@ export const tasksService = {
   async move(id: string, status: TaskStatus, beforeId: string | null): Promise<void> {
     if (useApi()) return http.patch(`/tasks/${id}/move`, { status, beforeId });
     const current = db().tasks.find(t => t.id === id);
+    if(current?.finalizedAt)throw new ServiceError('Tarefa finalizada: somente consulta.','FINALIZED');
     if (!current) throw new ServiceError('Tarefa não encontrada.', 'NOT_FOUND');
     validateMockTransition(current, status);
     mockDb.update((d) => {

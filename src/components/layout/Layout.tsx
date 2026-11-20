@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  BarChart3,
   Briefcase,
   CalendarDays,
   ChevronDown,
@@ -40,10 +41,9 @@ import { notificationsService, tasksService } from '@/services';
 import { cx, roleLabel } from '@/lib/labels';
 import type { AppNotification, Permission, UserPreferences } from '@/types/models';
 
-/** Telas fora do menu (acessíveis por link): /biblioteca e /relatorios. */
+/** Telas fora do menu (acessíveis por link): /biblioteca. */
 export const extraRoutes = [
   { to: '/biblioteca', label: 'Biblioteca' },
-  { to: '/relatorios', label: 'Relatórios' },
 ];
 
 type NavIcon = LucideIcon;
@@ -61,6 +61,7 @@ export const navTree: (NavLeaf | NavGroup)[] = [
     { to: '/projetos', label: 'Projetos', icon: Layers },
     { to: '/tarefas', label: 'Tarefas', icon: SquareCheck },
     { to: '/agenda', label: 'Agenda', icon: CalendarDays },
+    { to: '/relatorios', label: 'Relatórios', icon: BarChart3, perm: 'auditoria.ver' },
   ] },
   { id: 'financeiro', label: 'Financeiro', icon: Wallet, perm: 'financeiro.acessar', items: [
     { to: '/financeiro/investimentos', label: 'Investimentos', icon: TrendingUp },

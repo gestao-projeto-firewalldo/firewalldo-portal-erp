@@ -23,7 +23,7 @@ const notifIcon: Record<AppNotification['kind'], { icon: typeof Info; c: string 
 
 export default function Dashboard() {
   const { me, members, projects, projectsById, can, loading, error:sessionError } = useSession();
-  const tasksQ = useQuery(() => tasksService.list());
+  const tasksQ = useQuery(() => tasksService.list(true));
   const newsQ = useQuery(() => newsService.list());
   const notifQ = useQuery(() => notificationsService.list());
   const shortcutsQ = useQuery(() => settingsService.shortcuts());

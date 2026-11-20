@@ -62,6 +62,10 @@ export interface Task {
   scheduleId?: ID | null;
   scheduledFor?: string | null;
   scheduleIndividual?: boolean;
+  finalizedAt?: string | null;
+  finalizedBy?: ID | null;
+  finalizedByName?: string | null;
+  finalizedProjectName?: string | null;
   id: ID;
   title: string;
   description: string;
@@ -84,7 +88,7 @@ export interface Task {
   order: number;
 }
 
-export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy' | 'scheduleId' | 'scheduledFor' | 'scheduleIndividual' | 'ticketNumber'>;
+export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'createdBy' | 'scheduleId' | 'scheduledFor' | 'scheduleIndividual' | 'ticketNumber' | 'finalizedAt' | 'finalizedBy' | 'finalizedByName' | 'finalizedProjectName'>;
 
 /* ---------------- Projetos ---------------- */
 

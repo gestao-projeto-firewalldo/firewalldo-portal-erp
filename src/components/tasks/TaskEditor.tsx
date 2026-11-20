@@ -50,7 +50,7 @@ export function checklistProgress(t: Pick<Task, 'checklist' | 'status'>) {
 
 function editableTask(task?: Task): TaskInput {
   if (!task) return blank;
-  const { id, createdBy, createdAt, updatedAt, order, scheduleId, scheduledFor, scheduleIndividual, ticketNumber, ...input } = task;
+  const { id, createdBy, createdAt, updatedAt, order, scheduleId, scheduledFor, scheduleIndividual, ticketNumber, finalizedAt, finalizedBy, finalizedByName, finalizedProjectName, ...input } = task;
   return input;
 }
 
@@ -62,7 +62,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   const canEditAll = can('tarefas.editar_todas');
   const canCreate = can('tarefas.criar');
   const isAssignee = !!existing && !!me && existing.assigneeIds.includes(me.id);
-  const editable = existing ? canEditAll : canCreate;
+  const editable = existing ? canEditAll && !existing.finalizedAt : canCreate;
 
   const [form, setForm] = useState<TaskInput>(() => ({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) }));
   const [restricted, setRestricted] = useState(!!existing?.eligibleAssigneeIds?.length);
@@ -92,6 +92,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   };
 
   const toggleItem = async (item: ChecklistItem) => {
+    if(existing?.finalizedAt)return;
     const next = form.checklist.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c));
     set('checklist', next);
     if (existing && !editable && isAssignee) { try { await tasksService.setChecklist(existing.id, next); } catch(error) { set('checklist',form.checklist);toast({tone:'error',title:'Não foi possível salvar o checklist',description:(error as Error).message}); } }
@@ -180,8 +181,10 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <span className="badge outline"><CalendarDays /> {shortDate(existing.dueDate)}</span>
           )}
         </div>
+        {existing.finalizedAt&&<div className="notice finalized-note">Finalizada em {new Date(existing.finalizedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})} por {existing.finalizedByName??membersById[existing.finalizedBy??'']?.name??'Administrador principal'}. Histórico somente para consulta.{existing.finalizedProjectName&&<span> Projeto: {existing.finalizedProjectName}.</span>}</div>}
+        {existing.finalizedAt&&<p className="muted small">Criada em {shortDate(existing.createdAt)} por {membersById[existing.createdBy]?.name??existing.createdBy}. Última atualização: {shortDate(existing.updatedAt)}.{existing.scheduledFor&&` Liberada pela Agenda em ${new Date(existing.scheduledFor).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}.`}</p>}
         {isBacklog && <div className="notice backlog-editor-note">{existing.assigneeIds.length} de {existing.maxAssignees} aceites confirmados. A tarefa só vai para A fazer quando todas as vagas forem preenchidas.</div>}
-        <TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} />
+        <TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} onFinalized={onClose} />
         <p className="muted" style={{ marginBottom: 16 }}>{existing.description || 'Sem descrição.'}</p>
         <div className="label" style={{ marginBottom: 8 }}>Responsáveis</div>
         <div className="row" style={{ flexWrap: 'wrap', marginBottom: 16 }}>
@@ -200,7 +203,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
               {form.checklist.map((c) => (
                 <label key={c.id} className="check">
-                  <input type="checkbox" checked={c.done} disabled={!isAssignee} onChange={() => toggleItem(c)} />
+                  <input type="checkbox" checked={c.done} disabled={!isAssignee||!!existing.finalizedAt} onChange={() => toggleItem(c)} />
                   <span style={{ textDecoration: c.done ? 'line-through' : undefined, opacity: c.done ? 0.65 : 1 }}>{c.text}</span>
                 </label>
               ))}
@@ -269,7 +272,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field">
             <label htmlFor="t-st">Status</label>
-            {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} /></> : <select id="t-st" className="select" value={form.status} onChange={e => changeInitialStatus(e.target.value as TaskInput['status'])}>
+            {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} onFinalized={onClose} /></> : <select id="t-st" className="select" value={form.status} onChange={e => changeInitialStatus(e.target.value as TaskInput['status'])}>
               {statusOrder.filter(s => s === 'backlog' || s === 'a_fazer').map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
             </select>}
           </div>

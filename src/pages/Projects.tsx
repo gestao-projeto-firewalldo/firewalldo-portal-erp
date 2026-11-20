@@ -21,7 +21,7 @@ export const projectStatusColor: Record<ProjectStatus, string> = {
 
 export default function Projects() {
   const q = useQuery(() => projectsService.list());
-  const tasksQ = useQuery(() => tasksService.list());
+  const tasksQ = useQuery(() => tasksService.list(true));
   const { membersById, can } = useSession();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState<ProjectStatus | 'all'>('all');
