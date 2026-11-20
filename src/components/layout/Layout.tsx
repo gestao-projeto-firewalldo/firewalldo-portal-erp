@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -27,6 +27,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Avatar, Logo, Modal } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
 import { bindPushAccount, unsubscribeLocal } from '@/services/push';
@@ -45,7 +46,7 @@ export const extraRoutes = [
   { to: '/relatorios', label: 'Relatórios' },
 ];
 
-type NavIcon = ComponentType<{ size?: number }>;
+type NavIcon = LucideIcon;
 interface NavLeaf { to: string; label: string; icon: NavIcon; end?: boolean; crumb?: string; perm?: Permission }
 interface NavGroup { id: string; label: string; icon: NavIcon; items: NavLeaf[]; perm?: Permission }
 
