@@ -24,6 +24,7 @@ import type {
   RadarSource,
   Role,
   Shortcut,
+  ShortcutInput,
   Task,
   TaskInput,
   TaskStatus,
@@ -387,9 +388,26 @@ export const settingsService = {
     return simulate(() => db().shortcuts);
   },
   async saveShortcut(id: string, url: string): Promise<Shortcut> {
-    if (useApi()) return http.patch(`/settings/shortcuts/${id}`, { url });
-    mockDb.update(d => { const item=d.shortcuts.find(s=>s.id===id); if (item) item.url=url; });
+    return settingsService.updateShortcut(id, { url });
+  },
+  /** Cria um atalho no fim da lista. API: POST /settings/shortcuts */
+  async createShortcut(input: ShortcutInput): Promise<Shortcut> {
+    if (useApi()) return http.post('/settings/shortcuts', input);
+    const item: Shortcut = { id: uid('sc'), icon: 'link', label: input.label?.trim() || 'Novo atalho', url: input.url ?? '', image: input.image ?? '' };
+    mockDb.update(d => { d.shortcuts = [...d.shortcuts, item]; });
+    return simulate(() => item);
+  },
+  /** Edita nome, link e/ou logo. API: PATCH /settings/shortcuts/:id */
+  async updateShortcut(id: string, input: ShortcutInput): Promise<Shortcut> {
+    if (useApi()) return http.patch(`/settings/shortcuts/${id}`, input);
+    mockDb.update(d => { d.shortcuts = d.shortcuts.map(s => s.id === id ? { ...s, ...input } : s); });
     return simulate(() => db().shortcuts.find(s=>s.id===id)!);
+  },
+  /** API: DELETE /settings/shortcuts/:id */
+  async removeShortcut(id: string): Promise<void> {
+    if (useApi()) { await http.del(`/settings/shortcuts/${id}`); return; }
+    mockDb.update(d => { d.shortcuts = d.shortcuts.filter(s => s.id !== id); });
+    return simulate(() => undefined);
   },
   /** API: PUT /settings/shortcuts */
   async saveShortcuts(list: Shortcut[]): Promise<Shortcut[]> {

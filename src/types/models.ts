@@ -207,12 +207,20 @@ export interface AppNotification {
   kind: 'tarefa' | 'projeto' | 'noticia' | 'sistema';
 }
 
-/** Atalho do "Acesso rápido" (editável em Configurações → Integrações). */
+/** Atalho do "Acesso rápido" (editável direto na Visão geral). */
 export interface Shortcut {
   id: ID;
   label: string;
   url: string;
   icon: 'drive' | 'youtube' | 'instagram' | 'tiktok' | 'landing' | 'mindmap' | 'link';
+  /** Logo enviada pela equipe (data URL). Quando existe, substitui o ícone padrão. */
+  image?: string;
+}
+
+export interface ShortcutInput {
+  label?: string;
+  url?: string;
+  image?: string;
 }
 
 export interface UserPreferences {

@@ -2020,3 +2020,145 @@ button.select-pill {
 .radar-collector .data-table td:last-child {min-width:220px;white-space:normal;}
 .radar-collector .notice p {margin-top:6px;}
 .source-row .grow {min-width:0;overflow-wrap:anywhere;}
+
+/* =========================================================
+   V1.8 · Acesso rápido editável + preenchimento da Visão geral
+   ========================================================= */
+/* Os atalhos entram da esquerda para a direita; quando a linha acaba, descem para a esquerda. */
+.quick-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+.quick {
+  position: relative;
+  min-width: 0;
+  padding: 10px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+}
+button.quick { appearance: none; }
+.quick-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex: none;
+}
+.quick.empty { color: var(--text-2); }
+div.quick.empty { cursor: default; }
+.quick.add {
+  border-style: dashed;
+  color: var(--text-2);
+  background: transparent;
+}
+.quick.add svg { color: var(--primary); width: 34px; height: 34px; }
+.quick-grid.editing .quick:not(.add) {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+.quick-edit-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+}
+.quick .quick-edit-badge svg { width: 14px; height: 14px; }
+
+/* "Projetos em andamento" acompanha a altura da coluna lateral (sem buraco vazio embaixo). */
+.dash-grid:not(.even) { align-items: stretch; }
+.dash-projects {
+  display: flex;
+  flex-direction: column;
+}
+.dash-projects > :not(.card-head) { flex: 1; }
+.dash-projects > .state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.block .card-head > .btn { margin-left: auto; flex: none; }
+
+/* Modal de atalho */
+.sc-editor { display: grid; gap: 16px; }
+.sc-editor-logo { display: flex; align-items: center; gap: 16px; }
+.sc-logo-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  flex: none;
+  border-radius: var(--r-lg);
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.sc-logo-pick:hover { border-color: var(--primary); }
+.sc-logo-pick svg, .sc-logo-pick .quick-logo { width: 52px; height: 52px; }
+.sc-logo-hint {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+}
+.sc-logo-hint svg { width: 16px !important; height: 16px !important; }
+.sc-logo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sc-logo-actions .muted { flex-basis: 100%; }
+.sc-url-row { display: flex; gap: 8px; }
+.sc-url-row .input { flex: 1; min-width: 0; }
+.sc-editor-footer { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+
+@media (max-width: 1024px) {
+  .dash-projects > :not(.card-head) { flex: none; }
+}
+
+/* Celular: atalhos menores, 4 por linha */
+@media (max-width: 600px) {
+  .quick-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 4px 12px 14px;
+  }
+  .quick {
+    height: 78px;
+    gap: 6px;
+    padding: 6px 4px;
+    font-size: 11.5px;
+    border-radius: 12px;
+  }
+  .quick svg, .quick-logo { width: 30px; height: 30px; }
+  .quick.add svg { width: 26px; height: 26px; }
+  .quick-edit-badge { top: 4px; right: 4px; width: 20px; height: 20px; }
+  .quick .quick-edit-badge svg { width: 11px; height: 11px; }
+  .sc-editor-logo { align-items: flex-start; }
+  .sc-url-row { flex-direction: column; }
+}
+@media (max-width: 360px) {
+  .quick { height: 70px; font-size: 10.5px; }
+  .quick svg, .quick-logo { width: 26px; height: 26px; }
+}
+.sc-icon .quick-logo { width: 32px; height: 32px; }
+.shortcut-row.readonly { grid-template-columns: 40px minmax(120px, 180px) minmax(180px, 1fr); }
+@media (max-width: 600px) {
+  .shortcut-row.readonly { grid-template-columns: 32px minmax(0, 1fr); }
+}

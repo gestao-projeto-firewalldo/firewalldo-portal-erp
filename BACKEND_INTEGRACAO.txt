@@ -65,7 +65,11 @@ Biblioteca tem upload/download PostgreSQL (5 MB), consulta e exclusão auditadas
 A auditoria cobre novas ações após a migração V2, sem reconstruir o passado.
 
 REVISÃO 1.4
-PATCH /api/settings/shortcuts/:id salva {url} de um atalho isoladamente.
+PATCH /api/settings/shortcuts/:id salva {label?, url?, image?} de um atalho isoladamente.
+V1.8 — Acesso rápido editável direto na Visão geral (admins):
+  POST   /api/settings/shortcuts      {label?, url?, image?} cria no fim da lista (201)
+  DELETE /api/settings/shortcuts/:id  remove (204)
+  image = data URL png/jpeg/webp/gif até 256 KB ("" remove a logo).
 PATCH /api/projects/:id persiste dados/status/responsáveis/marcos.
 GET /api/library/folders e /api/library/files retornam dados reais.
 POST /api/library/files recebe {name,folderId,mediaType,content} (base64).

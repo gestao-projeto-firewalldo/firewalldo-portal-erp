@@ -167,6 +167,12 @@ export function ScriptModal({ news, onClose }: { news: NewsItem[]; onClose: () =
 
 /* ---------------- Ícones de acesso rápido (desenhos simplificados) ---------------- */
 
+/** Logo do atalho: a imagem enviada pela equipe ou, se não houver, o ícone padrão. */
+export function ShortcutLogo({ item }: { item: { icon: string; image?: string; label: string } }) {
+  if (item.image) return <img className="quick-logo" src={item.image} alt="" aria-hidden="true" draggable={false} />;
+  return <QuickIcon name={item.icon} />;
+}
+
 export function QuickIcon({ name }: { name: string }) {
   const p = { viewBox: '0 0 48 48', width: 48, height: 48, 'aria-hidden': true } as const;
   switch (name) {

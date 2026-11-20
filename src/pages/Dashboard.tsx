@@ -1,15 +1,16 @@
-import { type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, CircleCheck, Info, Layers, Newspaper, Plus, RefreshCw, SquareCheck, Users } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, CircleCheck, Info, Layers, Newspaper, Pencil, Plus, RefreshCw, SquareCheck, Users } from 'lucide-react';
 import { Async, Avatar, EmptyState, PriorityBadge, Progress, Skeleton, SkeletonList } from '@/components/ui';
-import { NewsCover, ProjectIcon, QuickIcon } from '@/components/shared';
+import { NewsCover, ProjectIcon, ShortcutLogo } from '@/components/shared';
+import { ShortcutEditor } from '@/components/shortcuts/ShortcutEditor';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
 import { newsService, notificationsService, settingsService, tasksService } from '@/services';
 import { categoryLabel, cx, daysUntil, relativeDay, shortDate , ticketLabel } from '@/lib/labels';
-import type { AppNotification } from '@/types/models';
+import type { AppNotification, Shortcut } from '@/types/models';
 import { projectProgress } from '@/lib/progress';
 
 const notifIcon: Record<AppNotification['kind'], { icon: typeof Info; c: string }> = {
@@ -27,6 +28,9 @@ export default function Dashboard() {
   const shortcutsQ = useQuery(() => settingsService.shortcuts());
   const openTask = useTaskEditor();
   const toast=useToast();
+  const canEditShortcuts = can('configuracoes.integracoes');
+  const [editingShortcuts, setEditingShortcuts] = useState(false);
+  const [shortcutForm, setShortcutForm] = useState<{ item?: Shortcut } | null>(null);
 
   const tasks = tasksQ.data ?? [];
   const online = members.filter((m) => m.active && m.status === 'online');
@@ -76,29 +80,52 @@ export default function Dashboard() {
       <section className="card block">
         <div className="card-head">
           <h2>Acesso rápido</h2>
+          {canEditShortcuts && shortcutsQ.data && (
+            <button className={cx('btn sm', editingShortcuts && 'primary')} onClick={() => setEditingShortcuts((v) => !v)} aria-pressed={editingShortcuts}>
+              {editingShortcuts ? <><Check size={16} /> Concluir</> : <><Pencil size={16} /> Editar</>}
+            </button>
+          )}
         </div>
-        <div className="quick-grid">
+        <div className={cx('quick-grid', editingShortcuts && 'editing')}>
           {(shortcutsQ.data ?? []).map((q) =>
-            q.url ? (
+            editingShortcuts ? (
+              <button key={q.id} type="button" className="quick" onClick={() => setShortcutForm({ item: q })} title={`Editar ${q.label}`}>
+                <span className="quick-edit-badge" aria-hidden="true"><Pencil size={14} /></span>
+                <ShortcutLogo item={q} />
+                <span className="quick-label">{q.label}</span>
+              </button>
+            ) : q.url ? (
               <a key={q.id} className="quick" href={q.url} target="_blank" rel="noreferrer" title={q.url}>
-                <QuickIcon name={q.icon} />
-                <span>{q.label}</span>
+                <ShortcutLogo item={q} />
+                <span className="quick-label">{q.label}</span>
               </a>
+            ) : canEditShortcuts ? (
+              <button key={q.id} type="button" className="quick empty" onClick={() => setShortcutForm({ item: q })} title="Link não configurado — clique para definir">
+                <ShortcutLogo item={q} />
+                <span className="quick-label">{q.label}</span>
+              </button>
             ) : (
-              <Link key={q.id} className="quick" to="/configuracoes?aba=integracoes" title="Link não configurado — defina em Configurações → Integrações">
-                <QuickIcon name={q.icon} />
-                <span>{q.label}</span>
-              </Link>
+              <div key={q.id} className="quick empty" title="Link não configurado">
+                <ShortcutLogo item={q} />
+                <span className="quick-label">{q.label}</span>
+              </div>
             ),
+          )}
+          {editingShortcuts && (
+            <button type="button" className="quick add" onClick={() => setShortcutForm({})} title="Adicionar atalho">
+              <Plus />
+              <span className="quick-label">Adicionar</span>
+            </button>
           )}
           {shortcutsQ.error && <p className="form-error" role="alert">{shortcutsQ.error.message}</p>}
           {!shortcutsQ.data && !shortcutsQ.error && [0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} h={116} r={12} />)}
         </div>
       </section>
+      {shortcutForm && <ShortcutEditor item={shortcutForm.item} onClose={() => setShortcutForm(null)} />}
 
       {/* ---------- Projetos + lateral ---------- */}
       <div className="dash-grid">
-        <section className="card">
+        <section className="card dash-projects">
           <div className="card-head">
             <h2>Projetos em andamento</h2>
             <Link to="/projetos" className="more">

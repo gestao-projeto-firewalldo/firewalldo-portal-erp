@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Bug, Check, KeyRound, Pencil, Plus, RotateCcw, Save } from 'lucide-react';
 import { Avatar, Modal, Skeleton } from '@/components/ui';
 import { PushSettings } from '@/components/notifications/PushSettings';
 import { RadarSettings } from '@/components/radar/RadarSettings';
 import { MemberEditor } from '@/components/users/MemberEditor';
-import { QuickIcon } from '@/components/shared';
+import { ShortcutLogo } from '@/components/shared';
 import { usePrefs } from '@/context/PrefsContext';
 import { rolePermissions, useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
@@ -14,7 +14,7 @@ import { authService, devFlags, membersService, mockDb, settingsService, uid } f
 import { cx, roleLabel } from '@/lib/labels';
 import { appConfig } from '@/config';
 import { useApi } from '@/services/core';
-import type { Permission, RadarSource, Shortcut, UserPreferences } from '@/types/models';
+import type { Permission, RadarSource, UserPreferences } from '@/types/models';
 
 type Tab = 'geral' | 'integracoes' | 'notificacoes';
 const tabs: { id: Tab; label: string }[] = [
@@ -53,7 +53,6 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({ name: '', title: '', bio: '' });
   const [prefsDraft, setPrefsDraft] = useState<UserPreferences>(prefs);
   const [sources, setSources] = useState<RadarSource[] | null>(null);
-  const [shortcuts, setShortcuts] = useState<Shortcut[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editingSource,setEditingSource]=useState<RadarSource|null>(null);
@@ -68,17 +67,13 @@ export default function SettingsPage() {
   useEffect(() => {
     if (sourcesQ.data && sources === null) setSources(sourcesQ.data);
   }, [sourcesQ.data, sources]);
-  useEffect(() => {
-    if (shortcutsQ.data && shortcuts === null) setShortcuts(shortcutsQ.data);
-  }, [shortcutsQ.data, shortcuts]);
 
   const dirty = useMemo(
     () =>
       (!!me && (profile.name !== me.name || profile.title !== me.title || profile.bio !== (me.bio ?? ''))) ||
       !same(prefsDraft, prefs) ||
-      (!!sources && !!sourcesQ.data && !same(sources, sourcesQ.data)) ||
-      (!!shortcuts && !!shortcutsQ.data && !same(shortcuts, shortcutsQ.data)),
-    [me, profile, prefsDraft, prefs, sources, sourcesQ.data, shortcuts, shortcutsQ.data],
+      (!!sources && !!sourcesQ.data && !same(sources, sourcesQ.data)),
+    [me, profile, prefsDraft, prefs, sources, sourcesQ.data],
   );
 
   const go = (t: Tab) => {
@@ -92,18 +87,11 @@ export default function SettingsPage() {
       toast({ tone: 'error', title: 'Informe um nome válido' });
       return;
     }
-    const bad = (shortcuts ?? []).find((s) => s.url && !/^https?:\/\//i.test(s.url));
-    if (bad) {
-      toast({ tone: 'error', title: 'Link inválido', description: `${bad.label}: use um endereço começando com https://` });
-      go('integracoes');
-      return;
-    }
     setSaving(true);
     try {
       if (me && !same(profile, { name: me.name, title: me.title, bio: me.bio ?? '' })) await membersService.update(me.id, profile);
       if (!same(prefsDraft, prefs)) await setPrefs(prefsDraft);
       if (sources && canIntegr && !same(sources, sourcesQ.data)) await settingsService.saveRadarSources(sources);
-      if (shortcuts && canIntegr && !same(shortcuts, shortcutsQ.data)) await settingsService.saveShortcuts(shortcuts);
       toast({ tone: 'success', title: 'Alterações salvas' });
     } catch (e) {
       toast({ tone: 'error', title: 'Não foi possível salvar', description: (e as Error).message });
@@ -287,7 +275,6 @@ export default function SettingsPage() {
                   setPrefs(mockDb.get().preferences);
                   setPrefsDraft(mockDb.get().preferences);
                   setSources(null);
-                  setShortcuts(null);
                   toast({ tone: 'success', title: 'Dados restaurados' });
                 }}
               >
@@ -358,23 +345,22 @@ export default function SettingsPage() {
                 <p>Gerencie os links rápidos usados pela equipe no dia a dia.</p>
               </div>
             </div>
-            {!shortcuts ? (
+            {!shortcutsQ.data ? (
               <Skeleton h={300} />
             ) : (
               <div className="shortcut-list">
-                {shortcuts.map((s) => (
-                  <ShortcutRow
-                    key={s.id}
-                    item={s}
-                    disabled={!canIntegr}
-                    onSave={async (url) => {
-                      const item = await settingsService.saveShortcut(s.id, url);
-                      setShortcuts(current => current?.map(x => x.id === item.id ? item : x) ?? null);
-                    }}
-                  />
+                {shortcutsQ.data.map((s) => (
+                  <div key={s.id} className="shortcut-row readonly">
+                    <span className="sc-icon"><ShortcutLogo item={s} /></span>
+                    <b className="sc-label">{s.label}</b>
+                    <input className="input" value={s.url} readOnly placeholder="Link não configurado" aria-label={`Link de ${s.label}`} />
+                  </div>
                 ))}
               </div>
             )}
+            <p className="muted small" style={{ marginTop: 12 }}>
+              Para adicionar, editar, trocar a logo ou remover atalhos, use <Link to="/">Visão geral → Acesso rápido → Editar</Link>.
+            </p>
           </section>
         </div>
       )}
@@ -422,35 +408,6 @@ export default function SettingsPage() {
       )}
     </div>
   );
-}
-
-function ShortcutRow({ item, disabled, onSave }: { item: Shortcut; disabled: boolean; onSave: (url: string) => Promise<void> }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.url);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const toast = useToast();
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
-  useEffect(() => { if (!editing) setDraft(item.url); }, [item.url, editing]);
-  const save = async () => {
-    let url = draft.trim();
-    if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
-    if (url) {
-      try { const parsed = new URL(url); if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) throw new Error(); }
-      catch { setError('Informe um endereço válido, como https://exemplo.com.'); return; }
-    }
-    setSaving(true); setError('');
-    try { await onSave(url); setDraft(url); setEditing(false); toast({ tone:'success', title:'Atalho salvo', description:item.label }); }
-    catch (err) { setError((err as Error).message); }
-    finally { setSaving(false); }
-  };
-  return <div className="shortcut-row">
-    <span className="sc-icon"><QuickIcon name={item.icon} /></span><b className="sc-label">{item.label}</b>
-    <input ref={inputRef} className="input" value={draft} readOnly={!editing} placeholder="Link não configurado" onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && editing) void save(); }} aria-label={`Link de ${item.label}`} />
-    <div className="shortcut-actions">{editing ? <><button className="btn primary" disabled={saving} onClick={() => void save()} aria-label={`Salvar ${item.label}`}>{saving ? 'Salvando…' : 'Salvar'}</button><button className="btn" disabled={saving} onClick={() => { setDraft(item.url); setEditing(false);setError(''); }}>Cancelar</button></> : <button className="btn icon" disabled={disabled} onClick={() => setEditing(true)} aria-label={`Editar ${item.label}`}><Pencil /></button>}</div>
-    {error && <p className="form-error" style={{flexBasis:'100%'}} role="alert">{error}</p>}
-  </div>;
 }
 
 function AddSourceModal({ source, onClose, onAdd }: { source?:RadarSource; onClose: () => void; onAdd: (s: RadarSource) => void }) {
