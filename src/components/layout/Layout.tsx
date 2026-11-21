@@ -61,7 +61,6 @@ export const navTree: (NavLeaf | NavGroup)[] = [
     { to: '/projetos', label: 'Projetos', icon: Layers },
     { to: '/tarefas', label: 'Tarefas', icon: SquareCheck },
     { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-    { to: '/relatorios', label: 'Relatórios', icon: BarChart3, perm: 'auditoria.ver' },
   ] },
   { id: 'financeiro', label: 'Financeiro', icon: Wallet, perm: 'financeiro.acessar', items: [
     { to: '/financeiro/investimentos', label: 'Investimentos', icon: TrendingUp },
@@ -70,6 +69,7 @@ export const navTree: (NavLeaf | NavGroup)[] = [
   ] },
   { id: 'sistema', label: 'Sistema', icon: Settings, items: [
     { to: '/usuarios', label: 'Usuários', icon: Users },
+    { to: '/relatorios', label: 'Relatórios', icon: BarChart3, perm: 'auditoria.ver' },
     { to: '/auditoria', label: 'Auditoria', icon: ShieldCheck, perm: 'auditoria.ver' },
     { to: '/configuracoes', label: 'Configurações', icon: SlidersHorizontal },
   ] },
@@ -77,7 +77,7 @@ export const navTree: (NavLeaf | NavGroup)[] = [
 const isGroup = (n: NavLeaf | NavGroup): n is NavGroup => 'items' in n;
 /** Lista plana (breadcrumbs e buscas). */
 export const navItems: NavLeaf[] = navTree.flatMap((n) => (isGroup(n) ? n.items : [n]));
-const OPEN_KEY = 'firewalldo:menu-open';
+const isWithin = (pathname:string,to:string) => pathname===to || pathname.startsWith(`${to}/`);
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -107,17 +107,21 @@ function Sidebar({ open }: { open: boolean }) {
   const { me, can } = useSession();
   const nav = useNavigate();
   const mine = (q.data ?? []).filter((t) => me && t.assigneeIds.includes(me.id) && t.status !== 'concluido').length;
-  const { pathname } = useLocation();
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]'); } catch { return []; }
-  });
-  // Ao abrir uma página (inclusive pela URL), o submenu dela aparece expandido.
-  useEffect(() => {
-    const group = navTree.find((n) => isGroup(n) && n.items.some((i) => pathname.startsWith(i.to))) as NavGroup | undefined;
-    if (group) setExpandedGroups((list) => (list.includes(group.id) ? list : [...list, group.id]));
-  }, [pathname]);
-  useEffect(() => { try { localStorage.setItem(OPEN_KEY, JSON.stringify(expandedGroups)); } catch { /* ignora */ } }, [expandedGroups]);
-  const toggle = (id: string) => setExpandedGroups((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const location = useLocation();
+  const {pathname} = location;
+  const [expandedGroup,setExpandedGroup]=useState<string|null>(null);
+  const previousLocation=useRef(location.key);
+  // Start collapsed. Subsequent navigation (links, shortcuts and back/forward)
+  // opens only the destination group, irrespective of which group was open.
+  useEffect(()=>{
+    if(previousLocation.current===location.key)return;
+    previousLocation.current=location.key;
+    const group=navTree.find((node):node is NavGroup=>isGroup(node)
+      && (!node.perm||can(node.perm))
+      && node.items.some(item=>(!item.perm||can(item.perm))&&isWithin(pathname,item.to)));
+    setExpandedGroup(group?.id??null);
+  },[location.key,pathname,can]);
+  const toggle=(id:string)=>setExpandedGroup(current=>current===id?null:id);
   return (
     <aside className={cx('sidebar', open && 'open')} aria-label="Navegação principal">
       <Link to="/" className="brand" aria-label={appConfig.appName}>
@@ -129,8 +133,8 @@ function Sidebar({ open }: { open: boolean }) {
           if (!isGroup(node)) return <NavLeafLink key={node.to} item={node} badge={0} />;
           if (node.perm && !can(node.perm)) return null;
           const items = node.items.filter((i) => !i.perm || can(i.perm));
-          const active = items.some((i) => pathname.startsWith(i.to));
-          const expanded = expandedGroups.includes(node.id);
+          const active = items.some((i) => isWithin(pathname,i.to));
+          const expanded = expandedGroup===node.id;
           const Icon = node.icon;
           return (
             <div key={node.id} className={cx('nav-group', expanded && 'open', active && 'has-active')}>
@@ -139,7 +143,7 @@ function Sidebar({ open }: { open: boolean }) {
                 <span>{node.label}</span>
                 <ChevronDown className="nav-caret" size={18} />
               </button>
-              <div className="nav-sub" id={`nav-${node.id}`}>
+              <div className="nav-sub" id={`nav-${node.id}`} aria-hidden={!expanded}>
                 <div className="nav-sub-inner">
                   {items.map((item) => <NavLeafLink key={item.to} item={item} badge={item.to === '/tarefas' ? mine : 0} sub tabIndex={expanded ? 0 : -1} />)}
                 </div>

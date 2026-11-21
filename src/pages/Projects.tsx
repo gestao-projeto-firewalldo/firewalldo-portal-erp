@@ -87,11 +87,12 @@ export default function Projects() {
                 <Link key={p.id} to={`/projetos/${p.id}`} className="card hover project-card" style={{ '--c': p.color } as CSSProperties}>
                   <div className="row">
                     <ProjectIcon project={p} size={50} />
-                    <div className="grow">
+                    <div className="grow" style={{minWidth:0}}>
                       <h3>{p.name}</h3>
                       <div className="muted small ellipsis">{p.subtitle}</div>
                     </div>
                   </div>
+                  {p.description&&<p className="project-description clamp-3" title={p.description}>{p.description}</p>}
                   <div className="row" style={{ flexWrap: 'wrap' }}>
                     {p.category && <span className="badge outline">{categoryLabel[p.category]}</span>}{p.brand && <span className="badge outline">{p.brand}</span>}
                     <SoftBadge color={projectStatusColor[p.status]}>{projectStatusLabel[p.status]}</SoftBadge>
@@ -103,7 +104,7 @@ export default function Projects() {
                     <div className="kv" style={{ marginBottom: 8 }}>
                       Progresso <b>{projectProgress(p, tasks)}%</b>
                     </div>
-                    <Progress value={projectProgress(p, tasks)} />
+                    <Progress value={projectProgress(p, tasks)} color={p.color} />
                   </div>
                   <div className="kv">
                     <span className="row" style={{ gap: 6 }}>

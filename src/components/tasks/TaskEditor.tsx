@@ -66,6 +66,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
 
   const [form, setForm] = useState<TaskInput>(() => ({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) }));
   const [restricted, setRestricted] = useState(!!existing?.eligibleAssigneeIds?.length);
+  const [maxInput,setMaxInput]=useState(()=>String(form.maxAssignees));
   const isBacklog = form.status === 'backlog';
   const [newItem, setNewItem] = useState('');
   const [saving, setSaving] = useState(false);
@@ -73,6 +74,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
 
   useEffect(() => {
     setRestricted(!!existing?.eligibleAssigneeIds?.length);
+    setMaxInput(String(args.prefill?.maxAssignees??existing?.maxAssignees??blank.maxAssignees));
     setForm({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) });
   }, [existing, args.prefill]);
 
@@ -108,11 +110,13 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
     const date=document.getElementById('t-due') as HTMLInputElement|null;
     if(date && !date.checkValidity()){date.reportValidity();setErrors({dueDate:date.validationMessage});return;}
     const e: Record<string, string> = {};
+    const max=Number(maxInput);
+    if(!/^\d+$/.test(maxInput)||!Number.isInteger(max)||max<1||max>100)e.max='Informe de 1 a 100 vagas.';
     if (form.title.trim().length < 3) e.title = 'Informe um título com pelo menos 3 caracteres.';
     if (!isBacklog && form.assigneeIds.length === 0)
       e.assignees = 'Atribua um responsável ou crie a tarefa no Backlog para receber aceites.';
-    if (form.assigneeIds.length > form.maxAssignees)
-      e.assignees = `Há ${form.assigneeIds.length} responsáveis para ${form.maxAssignees} vaga(s). Aumente o limite.`;
+    if (!e.max && form.assigneeIds.length > max)
+      e.assignees = `Há ${form.assigneeIds.length} responsáveis para ${max} vaga(s). Aumente o limite.`;
     if (isBacklog && restricted && !form.eligibleAssigneeIds?.length) e.eligible = 'Selecione pelo menos uma pessoa ou permita que qualquer pessoa aceite.';
     setErrors(e);
     if (Object.keys(e).length) return;
@@ -120,13 +124,13 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
     try {
       if (existing) {
         const { status, ...metadata } = form;
-        const payload: Partial<TaskInput> = {...metadata,open:isBacklog && form.assigneeIds.length<form.maxAssignees,
+        const payload: Partial<TaskInput> = {...metadata,maxAssignees:max,open:isBacklog && form.assigneeIds.length<max,
           eligibleAssigneeIds:isBacklog && !restricted ? [] : form.eligibleAssigneeIds ?? []};
         if (isBacklog) delete payload.assigneeIds;
         await tasksService.update(existing.id, payload);
         toast({ tone: 'success', title: 'Tarefa atualizada', description: form.title });
       } else {
-        await tasksService.create({...form,open:isBacklog,eligibleAssigneeIds:isBacklog && restricted ? form.eligibleAssigneeIds ?? [] : [],assigneeIds:isBacklog ? [] : form.assigneeIds});
+        await tasksService.create({...form,maxAssignees:max,open:isBacklog,eligibleAssigneeIds:isBacklog && restricted ? form.eligibleAssigneeIds ?? [] : [],assigneeIds:isBacklog ? [] : form.assigneeIds});
         toast({ tone: 'success', title: 'Tarefa criada', description: `${form.title} · ${statusLabel[form.status]}` });
       }
       onClose();
@@ -294,8 +298,8 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
               min={1}
               max={100}
               className="input"
-              value={form.maxAssignees}
-              onChange={(e) => set('maxAssignees', Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+              value={maxInput}
+              onChange={(e) => setMaxInput(e.target.value)}
             />
           </div>
           {isBacklog ? <>
@@ -307,11 +311,11 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
                 <label className="check"><input type="radio" name="task-eligibility" checked={restricted} onChange={() => setRestricted(true)}/> Pessoas selecionadas</label>
               </div>
               {restricted && <div className="chips">{members.filter(member => member.active || form.eligibleAssigneeIds?.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.eligibleAssigneeIds?.includes(member.id)&&'active')} aria-label={`Pode aceitar: ${member.name}`} aria-pressed={!!form.eligibleAssigneeIds?.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>}
-              <span className="muted small">{restricted ? `${form.eligibleAssigneeIds?.length ?? 0} pessoa(s) podem aceitar; ${form.maxAssignees} aceite(s) necessários para iniciar.` : 'Qualquer usuário ativo pode aceitar enquanto houver vaga.'}</span>
+              <span className="muted small">{restricted ? `${form.eligibleAssigneeIds?.length ?? 0} pessoa(s) podem aceitar; ${maxInput||'—'} aceite(s) necessários para iniciar.` : 'Qualquer usuário ativo pode aceitar enquanto houver vaga.'}</span>
               {errors.eligible && <span className="form-error small">{errors.eligible}</span>}
             </div>
             <div className="field full">
-              <span className="label">Aceites confirmados · {form.assigneeIds.length}/{form.maxAssignees}</span>
+              <span className="label">Aceites confirmados · {form.assigneeIds.length}/{maxInput||'—'}</span>
               {form.assigneeIds.length ? <TaskPeople members={form.assigneeIds.map(id => membersById[id]).filter(Boolean)}/> : <span className="muted small">Ninguém aceitou ainda. Convidar alguém não ocupa uma vaga.</span>}
               {errors.assignees && <span className="form-error small">{errors.assignees}</span>}
             </div>

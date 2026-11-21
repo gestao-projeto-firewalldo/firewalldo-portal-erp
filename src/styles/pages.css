@@ -866,8 +866,13 @@
   gap: 16px;
   padding: 22px;
   color: var(--text);
+  border-top: 4px solid var(--c);
+  background: linear-gradient(135deg, color-mix(in srgb,var(--c) 15%,transparent), color-mix(in srgb,var(--c) 4%,transparent)), var(--surface);
 }
+.card.hover.project-card:hover { border-top-color:var(--c); }
+.project-description { margin:0; color:var(--text-2); line-height:1.5; white-space:pre-line; overflow-wrap:anywhere; }
 .project-card h3 {
+  overflow-wrap:anywhere;
   font-size: 18px;
   font-weight: 600;
 }

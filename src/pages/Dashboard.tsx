@@ -21,6 +21,13 @@ const notifIcon: Record<AppNotification['kind'], { icon: typeof Info; c: string 
   sistema: { icon: Info, c: 'var(--warning)' },
 };
 
+function internalShortcut(url:string):string|null {
+  try {
+    const target=new URL(url,window.location.href);
+    return target.origin===window.location.origin?target.pathname+target.search+target.hash:null;
+  }catch{return null;}
+}
+
 export default function Dashboard() {
   const { me, members, projects, projectsById, can, loading, error:sessionError } = useSession();
   const tasksQ = useQuery(() => tasksService.list(true));
@@ -102,6 +109,11 @@ export default function Dashboard() {
                 <ShortcutLogo item={q} />
                 <span className="quick-label">{q.label}</span>
               </button>
+            ) : q.url && internalShortcut(q.url) ? (
+              <Link key={q.id} className="quick" to={internalShortcut(q.url)!} title={q.url}>
+                <ShortcutLogo item={q} />
+                <span className="quick-label">{q.label}</span>
+              </Link>
             ) : q.url ? (
               <a key={q.id} className="quick" href={q.url} target="_blank" rel="noreferrer" title={q.url}>
                 <ShortcutLogo item={q} />

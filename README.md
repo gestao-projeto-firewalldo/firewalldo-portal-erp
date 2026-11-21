@@ -58,3 +58,10 @@ O editor da Agenda oferece coluna de entrada Backlog/A fazer e número de vagas 
 ## Portal 1.1.13 — finalizar e consultar histórico
 
 Somente o administrador principal vê Finalizar nas tarefas concluídas. Após confirmação, saem do Kanban e aparecem resumidas no histórico do projeto; clicar abre os dados em modo de consulta. Relatórios agora aparece no menu Gestão para administradores, com Histórico de ações, Tarefas finalizadas e Indicadores. Filtros permitem identificar a autoria de notícias, tarefas, projetos e demais ações auditadas, mesmo após exclusões, com detalhes e exportação CSV. O histórico usa dados persistidos da auditoria; registros antigos podem ter detalhes limitados.
+
+
+## Portal 1.1.14 — navegação e cards dos projetos
+
+Paginação acima dos registros em Auditoria e no histórico dos Relatórios. Cards de projetos mostram a descrição em até três linhas (texto completo ao abrir o projeto), fundo com a cor escolhida, borda superior e progresso na mesma cor. Relatórios fica no submenu Sistema. Os submenus começam fechados, não reaproveitam o estado antigo salvo e permitem no máximo um aberto. Navegações internas, atalhos, voltar e avançar abrem apenas o grupo da página de destino; páginas sem grupo fecham todos. Atalhos de mesma origem usam navegação interna; links externos continuam em nova aba. A API e o banco não foram alterados nesta versão.
+
+Revisão de 25/11/2026: campos numéricos da Agenda (vagas, intervalo e prazo) e limite de vagas das tarefas aceitam apagar e redigitar sem forçar zero ou um durante a edição. Valores inteiros e limites continuam validados ao salvar, antes do envio numérico à API.

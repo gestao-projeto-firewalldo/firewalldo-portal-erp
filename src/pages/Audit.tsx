@@ -76,9 +76,9 @@ function AuditList({report=false}:{report?:boolean}) {
       <button className="btn ghost sm" onClick={() => { setSearch('');setQ('');setActorId('');setAction('');setEntity('');setOutcome('');setFrom('');setTo('');setPage(1); }}>Limpar filtros</button>
     </section>
     {query.error ? <div className="notice form-error" role="alert">{query.error.message}</div> : query.loading ? <Skeleton h={360} /> : <>
+      <nav className="row audit-pagination" aria-label="Paginação dos registros"><span className="muted small">Página {page} de {pages}</span><button className="btn" disabled={page <= 1} onClick={() => setPage(page-1)}><ChevronLeft size={18} /> Anterior</button><button className="btn" disabled={page >= pages} onClick={() => setPage(page+1)}>Próxima <ChevronRight size={18} /></button></nav>
       <p className="muted small audit-count">{query.data?.total ?? 0} registros encontrados</p>
       <div className="card">{!query.data?.items.length ? <EmptyState icon={<ShieldCheck />} title="Nenhum registro encontrado" description="Tente outros filtros ou faça uma ação e atualize a lista." /> : <div className="table-scroll"><table className="data-table audit-table"><thead><tr><th>Data e horário</th><th>Autor</th><th>Ação</th><th>Registro</th><th>IP</th><th>Resultado e detalhes</th></tr></thead><tbody>{query.data.items.map(item => <AuditRow key={item.id} item={item} />)}</tbody></table></div>}</div>
-      <div className="row audit-pagination"><span className="muted small">Página {page} de {pages}</span><button className="btn" disabled={page <= 1} onClick={() => setPage(page-1)}><ChevronLeft size={18} /> Anterior</button><button className="btn" disabled={page >= pages} onClick={() => setPage(page+1)}>Próxima <ChevronRight size={18} /></button></div>
     </>}
   </div>;
 }
