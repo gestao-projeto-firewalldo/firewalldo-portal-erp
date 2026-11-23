@@ -65,3 +65,10 @@ Somente o administrador principal vê Finalizar nas tarefas concluídas. Após c
 Paginação acima dos registros em Auditoria e no histórico dos Relatórios. Cards de projetos mostram a descrição em até três linhas (texto completo ao abrir o projeto), fundo com a cor escolhida, borda superior e progresso na mesma cor. Relatórios fica no submenu Sistema. Os submenus começam fechados, não reaproveitam o estado antigo salvo e permitem no máximo um aberto. Navegações internas, atalhos, voltar e avançar abrem apenas o grupo da página de destino; páginas sem grupo fecham todos. Atalhos de mesma origem usam navegação interna; links externos continuam em nova aba. A API e o banco não foram alterados nesta versão.
 
 Revisão de 25/11/2026: campos numéricos da Agenda (vagas, intervalo e prazo) e limite de vagas das tarefas aceitam apagar e redigitar sem forçar zero ou um durante a edição. Valores inteiros e limites continuam validados ao salvar, antes do envio numérico à API.
+
+
+## Portal 1.1.15 — Driver e descrição completa
+
+A página interna do projeto mostra a descrição integral em um painel próprio, preservando as quebras de linha. Conteúdo > Driver organiza atalhos em campos com nome, foto e descrição. Cada campo contém atalhos com nome, foto e URL, com ações de criação, edição e exclusão para administradores. Contas comuns podem consultar, buscar e abrir os links.
+
+A busca geral procura campos por nome/descrição e atalhos por nome/URL; a busca em cada campo filtra apenas os próprios atalhos. O seletor de filtros lista os campos do banco, acompanha renomeações e exclusões e permite marcar vários, iniciando com todos. Campos novos entram automaticamente quando o filtro está em Todos. Imagens aceitam seletor ou arraste, com prévia. URLs internas mantêm a navegação e o submenu correspondente; URLs externas abrem em nova aba. As ações também aparecem em Auditoria e Relatórios > Histórico de ações. Requer a API com migração V13. As mudanças anteriores até 1.1.14 permanecem.

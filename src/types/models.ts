@@ -404,3 +404,13 @@ export interface FinanceSummary {
   period: string;
   upcoming: Payment[];
 }
+export interface DriverShortcut {
+  id: ID; fieldId: ID; name: string; url: string; image: string|null;
+  createdBy: ID; createdAt: string; updatedAt: string;
+}
+export interface DriverField {
+  id: ID; name: string; description: string; image: string|null;
+  createdBy: ID; createdAt: string; updatedAt: string; shortcuts: DriverShortcut[];
+}
+export interface DriverFieldInput { name:string;description:string;image?:string }
+export interface DriverShortcutInput { name:string;url:string;image?:string }

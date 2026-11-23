@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileText,
   Home,
+  HardDrive,
   Layers,
   Lightbulb,
   LogOut,
@@ -56,6 +57,7 @@ export const navTree: (NavLeaf | NavGroup)[] = [
   { id: 'conteudo', label: 'Conteúdo', icon: Newspaper, items: [
     { to: '/radar', label: 'Radar de notícias', icon: Newspaper },
     { to: '/ideias', label: 'Ideias', icon: Lightbulb },
+    { to: '/driver', label: 'Driver', icon: HardDrive },
   ] },
   { id: 'gestao', label: 'Gestão', icon: Briefcase, items: [
     { to: '/projetos', label: 'Projetos', icon: Layers },

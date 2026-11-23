@@ -51,7 +51,7 @@ export default function ProjectDetail() {
               {editing && <ProjectEditor project={p} onClose={()=>setEditing(false)} />}
               <section className="card project-head">
                 <ProjectIcon project={p} size={72} />
-                <div className="grow" style={{ minWidth: 220 }}>
+                <div className="grow" style={{ minWidth: 0, flex:'1 1 320px' }}>
                   <h1>{p.name}</h1>
                   <p className="muted">{p.subtitle}</p>
                   <div className="row" style={{ marginTop: 12, gap: 18, flexWrap: 'wrap' }}>
@@ -70,6 +70,11 @@ export default function ProjectDetail() {
                     <Progress value={pct} />
                   </div>
                 </div>
+              </section>
+
+              <section className="card project-description-panel">
+                <div className="card-head"><h2>Descrição do projeto</h2></div>
+                <div className="card-body"><p>{p.description||'Nenhuma descrição adicionada.'}</p></div>
               </section>
 
               <div className="detail-grid">

@@ -15,6 +15,7 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Library from '@/pages/Library';
 import News from '@/pages/News';
 import Ideas from '@/pages/Ideas';
+import Driver from '@/pages/Driver';
 import AuditPage from '@/pages/Audit';
 import Team from '@/pages/Team';
 import Reports from '@/pages/Reports';
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="biblioteca" element={<Library />} />
                   <Route path="radar" element={<News />} />
                   <Route path="ideias" element={<Ideas />} />
+                  <Route path="driver" element={<Driver />} />
                   <Route path="usuarios" element={<Team />} />
                   <Route path="equipe" element={<Navigate to="/usuarios" replace />} />
                   <Route path="relatorios" element={<Reports />} />

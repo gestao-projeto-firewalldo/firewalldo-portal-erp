@@ -566,3 +566,13 @@ export const financeService = {
   /** Abre o anexo/comprovante numa nova aba (a sessão vai pelo cookie). */
   fileUrl(id: string, which: 'attachment' | 'receipt') { return `${appConfig.apiBaseUrl}/finance/payments/${id}/${which}`; },
 };
+
+export const driverService = {
+  list:()=>http.get<import('@/types/models').DriverField[]>('/driver'),
+  createField:(data:import('@/types/models').DriverFieldInput)=>http.post<import('@/types/models').DriverField>('/driver/fields',data),
+  updateField:(id:string,data:Partial<import('@/types/models').DriverFieldInput>)=>http.patch<import('@/types/models').DriverField>(`/driver/fields/${id}`,data),
+  removeField:(id:string)=>http.del<void>(`/driver/fields/${id}`),
+  createShortcut:(fieldId:string,data:import('@/types/models').DriverShortcutInput)=>http.post<import('@/types/models').DriverShortcut>(`/driver/fields/${fieldId}/shortcuts`,data),
+  updateShortcut:(id:string,data:Partial<import('@/types/models').DriverShortcutInput>)=>http.patch<import('@/types/models').DriverShortcut>(`/driver/shortcuts/${id}`,data),
+  removeShortcut:(id:string)=>http.del<void>(`/driver/shortcuts/${id}`),
+};
