@@ -8,6 +8,7 @@
  * As regras de negócio aplicadas aqui no mock (ex.: limite de vagas) devem ser
  * replicadas/validadas no servidor — o front não é fonte de verdade.
  */
+import { canMoveTask, taskSteps } from '@/lib/taskWorkflow';
 import { appConfig } from '@/config';
 import { http, mockDb, simulate, today, uid, useApi, ServiceError } from './core';
 import type {
@@ -125,6 +126,13 @@ export const photoService = {
 /* ================= Projetos ================= */
 
 export const projectsService = {
+  async remove(id: string): Promise<void> {
+    if (useApi()) return http.del(`/projects/${id}`);
+    const state = db();
+    if (!['admin', 'superadmin'].includes(state.viewAsRole)) throw new ServiceError('Sem permissão.', 'FORBIDDEN');
+    if (!state.projects.some(p => p.id === id)) throw new ServiceError('Projeto não encontrado.', 'NOT_FOUND');
+    mockDb.update(d => { d.projects = d.projects.filter(p => p.id !== id); d.tasks.forEach(t => { if (t.projectId === id) t.projectId = null; }); });
+  },
   async update(id: string, patch: Partial<Omit<Project,'id'|'startDate'|'progress'>>): Promise<Project> {
     if (useApi()) return http.patch(`/projects/${id}`,patch);
     mockDb.update(d=>{const item=d.projects.find(p=>p.id===id);if(item)Object.assign(item,patch);});
@@ -165,6 +173,12 @@ export const projectsService = {
 };
 
 /* ================= Tarefas ================= */
+function validateMockTransition(task: Task, status: TaskStatus) {
+  const state = db();
+  if (!canMoveTask(task, { id: state.currentUserId, role: state.viewAsRole })) throw new ServiceError('Você só pode mover tarefas em que é responsável.', 'FORBIDDEN');
+  if (status !== task.status && !taskSteps(task.status).some(step => step.status === status)) throw new ServiceError('Use a próxima etapa ou a anterior. No Backlog, use Aceitar tarefa.', 'INVALID_INPUT');
+}
+
 
 export const tasksService = {
   /** API: GET /tasks   (filtros opcionais: ?projectId=&assigneeId=&status=) */
@@ -176,6 +190,7 @@ export const tasksService = {
   async create(input: TaskInput): Promise<Task> {
     if (useApi()) return http.post('/tasks', input);
     const s = db();
+    if (!['backlog', 'a_fazer'].includes(input.status)) throw new ServiceError('Crie a tarefa no Backlog ou em A fazer.', 'INVALID_INPUT');
     const task: Task = {
       ...input,
       id: uid('t'),
@@ -192,15 +207,20 @@ export const tasksService = {
   /** API: PATCH /tasks/:id */
   async update(id: string, patch: Partial<Task>): Promise<Task> {
     if (useApi()) return http.patch(`/tasks/${id}`, patch);
+    const current = db().tasks.find(t => t.id === id);
+    if (current && patch.status && patch.status !== current.status) validateMockTransition(current, patch.status);
     mockDb.update((d) => {
       const t = d.tasks.find((x) => x.id === id);
       if (t) Object.assign(t, patch, { updatedAt: today() });
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },
-  /** Muda coluna/ordem (arrastar no Kanban). API: PATCH /tasks/:id/move  { status, beforeId } */
+  /** Move uma etapa usando os botões do Kanban. API: PATCH /tasks/:id/move  { status, beforeId } */
   async move(id: string, status: TaskStatus, beforeId: string | null): Promise<void> {
     if (useApi()) return http.patch(`/tasks/${id}/move`, { status, beforeId });
+    const current = db().tasks.find(t => t.id === id);
+    if (!current) throw new ServiceError('Tarefa não encontrada.', 'NOT_FOUND');
+    validateMockTransition(current, status);
     mockDb.update((d) => {
       const t = d.tasks.find((x) => x.id === id);
       if (!t) return;

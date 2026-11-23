@@ -602,14 +602,14 @@
   border-radius: var(--r);
   background: rgba(6, 12, 24, 0.42);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-  cursor: grab;
+  cursor: pointer;
   transition: border-color var(--dur), opacity var(--dur);
 }
 .task-card:hover {
   border-color: color-mix(in srgb, var(--c) 70%, var(--border));
 }
 .task-card:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
 .task-card.dragging {
   opacity: 0.4;
@@ -2162,3 +2162,26 @@ div.quick.empty { cursor: default; }
 @media (max-width: 600px) {
   .shortcut-row.readonly { grid-template-columns: 32px minmax(0, 1fr); }
 }
+
+/* Portal 1.1.10 */
+.task-card { cursor: pointer; }
+.task-workflow { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.task-workflow .btn { flex:1; min-width:90px; }
+.dashboard-task .task-workflow { margin-top:0; }
+.confirm-description { line-height:1.65; overflow-wrap:anywhere; }
+.audit-expand-button { display:block; margin-top:8px; color:var(--primary); }
+.audit-detail-row > td { padding:0 14px 14px !important; }
+.audit-detail-row .audit-detail-content { margin-top:0; background:var(--bg); }
+.audit-detail-content { margin-top:12px; padding:14px; border:1px solid var(--border); border-radius:10px; min-width:0; }
+.audit-detail-content h3 { font-size:15px; margin-bottom:14px; }
+.audit-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:0 0 16px; }
+.audit-detail-grid dt { color:var(--text-muted); font-size:12px; margin-bottom:4px; }
+.audit-detail-grid dd { margin:0; overflow-wrap:anywhere; white-space:normal; }
+.audit-changes-scroll { max-width:100%; overflow-x:auto; }
+.audit-changes { width:100%; table-layout:fixed; border-collapse:collapse; min-width:360px; }
+.audit-changes th,.audit-changes td { white-space:pre-wrap !important; overflow-wrap:anywhere; vertical-align:top; padding:9px !important; font-size:12px; }
+.audit-changes th:first-child { width:24%; }
+.audit-detail-content p { margin:10px 0; white-space:normal; }
+.audit-detail-content > small { display:block; overflow-wrap:anywhere; white-space:normal; }
+
+@media(max-width:600px) { .audit-detail-grid { grid-template-columns:1fr; } .dashboard-task { flex-wrap:wrap; } }

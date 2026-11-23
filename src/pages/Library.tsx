@@ -1,3 +1,4 @@
+import { useConfirm } from '@/context/ConfirmContext';
 import { useApi } from '@/services/core';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -260,6 +261,7 @@ export default function Library() {
 function PreviewModal({ file, folderName, ownerName, onClose }: { file: LibraryFile; folderName: string; ownerName?: string; onClose: () => void }) {
   const { me, can } = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   const [removing,setRemoving] = useState(false);
   const Icon = kindIcon[file.kind];
   const canRender = !!file.previewUrl && ['image', 'video', 'audio', 'pdf'].includes(file.kind);
@@ -282,7 +284,7 @@ function PreviewModal({ file, folderName, ownerName, onClose }: { file: LibraryF
             </a>
           ) : null}
           {useApi() && (can('usuarios.gerenciar') || me?.id === file.ownerId) && <button className="btn danger" disabled={removing} onClick={async () => {
-            if (!confirm(`Excluir ${file.name}?`)) return;
+            if (!await confirm({title:'Excluir arquivo?',description:`Tem certeza que deseja excluir “${file.name}”?`,confirmLabel:'Excluir arquivo'})) return;
             setRemoving(true);
             try { await libraryService.remove(file.id);toast({tone:'success',title:'Arquivo excluído'});onClose(); }
             catch(error) { toast({tone:'error',title:'Não foi possível excluir',description:(error as Error).message}); }

@@ -1,3 +1,5 @@
+import { TaskWorkflow } from '@/components/tasks/TaskWorkflow';
+import { useConfirm } from '@/context/ConfirmContext';
 import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { CalendarDays, CheckSquare, Hand, ListChecks, Plus, Save, Trash2, X } from 'lucide-react';
 import { Avatar, CategoryBadge, Modal, PriorityBadge, Progress } from '@/components/ui';
@@ -52,6 +54,7 @@ function editableTask(task?: Task): TaskInput {
 function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   const { me, members, membersById, projects, can } = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   const existing = args.task;
   const canEditAll = can('tarefas.editar_todas');
   const canCreate = can('tarefas.criar');
@@ -98,7 +101,8 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
     setSaving(true);
     try {
       if (existing) {
-        await tasksService.update(existing.id, form);
+        const { status, ...metadata } = form;
+        await tasksService.update(existing.id, metadata);
         toast({ tone: 'success', title: 'Tarefa atualizada', description: form.title });
       } else {
         await tasksService.create(form);
@@ -113,7 +117,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   };
 
   const remove = async () => {
-    if (!existing || !confirm(`Excluir a tarefa "${existing.title}"?`)) return;
+    if (!existing || !await confirm({title:'Excluir tarefa?', description:`Tem certeza que deseja excluir “${existing.title}”?`, confirmLabel:'Excluir tarefa'})) return;
     try {await tasksService.remove(existing.id);toast({ tone:'info',title:'Tarefa excluída' });onClose();}
     catch(error) {toast({tone:'error',title:'Não foi possível excluir',description:(error as Error).message});}
   };
@@ -138,7 +142,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         icon={<span className="icon-tile"><ListChecks /></span>}
         footer={
           <>
-            {existing.open && !isAssignee && existing.assigneeIds.length < existing.maxAssignees && (
+            {existing.status === 'backlog' && existing.open && !isAssignee && existing.assigneeIds.length < existing.maxAssignees && (
               <button className="btn primary" onClick={accept}>
                 <Hand /> Aceitar tarefa
               </button>
@@ -156,7 +160,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <span className="badge outline"><CalendarDays /> {shortDate(existing.dueDate)}</span>
           )}
         </div>
-        {isAssignee && <div className="field" style={{marginBottom:16}}><label htmlFor="own-task-status">Status da minha tarefa</label><select id="own-task-status" className="select" value={form.status} onChange={async e=>{const status=e.target.value as Task['status'];try{await tasksService.update(existing.id,{status});set('status',status);toast({tone:'success',title:'Status atualizado'});}catch(error){toast({tone:'error',title:'Não foi possível atualizar',description:(error as Error).message});}}}>{statusOrder.filter(s=>s!=='backlog').map(s=><option key={s} value={s}>{statusLabel[s]}</option>)}</select></div>}
+        <TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} />
         <p className="muted" style={{ marginBottom: 16 }}>{existing.description || 'Sem descrição.'}</p>
         <div className="label" style={{ marginBottom: 8 }}>Responsáveis</div>
         <div className="row" style={{ flexWrap: 'wrap', marginBottom: 16 }}>
@@ -243,9 +247,9 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field">
             <label htmlFor="t-st">Status</label>
-            <select id="t-st" className="select" value={form.status} onChange={(e) => set('status', e.target.value as TaskInput['status'])}>
-              {statusOrder.map((s) => <option key={s} value={s}>{statusLabel[s]}</option>)}
-            </select>
+            {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} /></> : <select id="t-st" className="select" value={form.status} onChange={e => set('status', e.target.value as TaskInput['status'])}>
+              {statusOrder.filter(s => s === 'backlog' || s === 'a_fazer').map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
+            </select>}
           </div>
           <div className="field">
             <label htmlFor="t-pr">Prioridade</label>

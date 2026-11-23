@@ -8,10 +8,10 @@ import { useQuery } from '@/hooks/useQuery';
 import { http, useApi } from '@/services/core';
 
 interface AuditEntry {
-  id: string; createdAt: string; actorName: string; actorEmail: string;
+  id: string; createdAt: string; actorId: string | null; actorName: string; actorEmail: string;
   action: string; entity: string; entityId: string; targetName: string;
   ip: string | null; outcome: string;
-  details: { fields?: string[]; passwordChanged?: boolean; route?: string; method?: string; httpStatus?: number; previousRole?: string; role?: string };
+  details: { fields?: string[]; passwordChanged?: boolean; route?: string; method?: string; httpStatus?: number; previousRole?: string; role?: string; actorRole?: string; changes?: Record<string, {before:unknown;after:unknown}> };
 }
 interface AuditResult { items: AuditEntry[]; total: number; page: number; pageSize: number }
 const actions: Record<string,string> = { criacao:'Criação', edicao:'Edição', exclusao:'Exclusão', login:'Tentativa de login', logout:'Saída', ativacao:'Ativação de conta', acesso:'Tentativa de acesso' };
@@ -58,11 +58,62 @@ function AuditList() {
       <button className="btn ghost sm" onClick={() => { setSearch('');setQ('');setAction('');setEntity('');setOutcome('');setFrom('');setTo('');setPage(1); }}>Limpar filtros</button>
     </section>
     {query.error ? <div className="notice form-error" role="alert">{query.error.message}</div> : query.loading ? <Skeleton h={360} /> : <>
-      <p className="muted small audit-count">{query.data?.total ?? 0} registros encontrados · Os registros começam com esta atualização.</p>
-      <div className="card">{!query.data?.items.length ? <EmptyState icon={<ShieldCheck />} title="Nenhum registro encontrado" description="Tente outros filtros ou faça uma ação e atualize a lista." /> : <div className="table-scroll"><table className="data-table audit-table"><thead><tr><th>Data e horário</th><th>Autor</th><th>Ação</th><th>Registro</th><th>IP</th><th>Resultado e detalhes</th></tr></thead><tbody>{query.data.items.map(item => <tr key={item.id}>
-        <td className="audit-time">{dateTime(item.createdAt)}</td><td><b>{item.actorName}</b>{item.actorEmail && <small>{item.actorEmail}</small>}</td><td>{actions[item.action] ?? item.action}</td><td><b>{entities[item.entity] ?? item.entity}</b><small>{item.targetName || item.entityId || '—'}</small></td><td><code>{item.ip || '—'}</code></td><td><span className={`audit-outcome ${item.outcome}`}>{outcomes[item.outcome] ?? item.outcome}</span><details><summary>Ver detalhes</summary>{item.details.fields && <p>Campos: {item.details.fields.map(f => fieldNames[f] ?? f).join(', ')}.</p>}{item.details.passwordChanged && <p>Senha definida ou alterada.</p>}{item.details.route && <p>{item.details.method} {item.details.route} · HTTP {item.details.httpStatus}</p>}<small>Registro de auditoria #{item.id}</small></details></td>
-      </tr>)}</tbody></table></div>}</div>
+      <p className="muted small audit-count">{query.data?.total ?? 0} registros encontrados</p>
+      <div className="card">{!query.data?.items.length ? <EmptyState icon={<ShieldCheck />} title="Nenhum registro encontrado" description="Tente outros filtros ou faça uma ação e atualize a lista." /> : <div className="table-scroll"><table className="data-table audit-table"><thead><tr><th>Data e horário</th><th>Autor</th><th>Ação</th><th>Registro</th><th>IP</th><th>Resultado e detalhes</th></tr></thead><tbody>{query.data.items.map(item => <AuditRow key={item.id} item={item} />)}</tbody></table></div>}</div>
       <div className="row audit-pagination"><span className="muted small">Página {page} de {pages}</span><button className="btn" disabled={page <= 1} onClick={() => setPage(page-1)}><ChevronLeft size={18} /> Anterior</button><button className="btn" disabled={page >= pages} onClick={() => setPage(page+1)}>Próxima <ChevronRight size={18} /></button></div>
     </>}
+  </div>;
+}
+
+const roles: Record<string,string> = {superadmin:'Administrador principal',admin:'Administrador',usuario:'Usuário'};
+const businessLabels: Record<string,string> = {backlog:'Backlog',a_fazer:'A fazer',em_andamento:'Em andamento',concluido:'Concluída',planejamento:'Planejamento',pausado:'Pausado',baixa:'Baixa',media:'Média',alta:'Alta',critica:'Crítica',true:'Sim',false:'Não'};
+Object.assign(fieldNames, {actor_id:'autor',project_id:'projeto',priority:'prioridade',brand:'marca',subtitle:'subtítulo',finance_access:'acesso ao financeiro',start_date:'início',end_date:'fim',slot:'posição da notícia',source_name:'fonte',amount_cents:'valor',billing:'cobrança',frequency:'frequência',due_day:'dia de vencimento',payment_method:'forma de pagamento',kind:'tipo',beneficiary:'beneficiário',paid_at:'data do pagamento',attachment_name:'anexo',receipt_name:'comprovante',foto:'foto de perfil'});
+
+function AuditRow({item}:{item:AuditEntry}) {
+  const [expanded,setExpanded] = useState(false);
+  const panelId = `audit-detail-${item.id}`;
+  return <><tr>
+    <td className="audit-time">{dateTime(item.createdAt)}</td>
+    <td><b>{item.actorName}</b>{item.actorEmail && <small>{item.actorEmail}</small>}</td>
+    <td>{actions[item.action] ?? item.action}</td>
+    <td><b>{entities[item.entity] ?? item.entity}</b><small>{item.targetName || item.entityId || '—'}</small></td>
+    <td><code>{item.ip || '—'}</code></td>
+    <td><span className={`audit-outcome ${item.outcome}`}>{outcomes[item.outcome] ?? item.outcome}</span><button className="btn ghost sm audit-expand-button" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)}>{expanded ? 'Ocultar detalhes' : 'Ver detalhes'}</button></td>
+  </tr>{expanded && <tr className="audit-detail-row"><td colSpan={6}><div id={panelId}><AuditDetails item={item}/></div></td></tr>}</>;
+}
+
+function AuditDetails({item}:{item:AuditEntry}) {
+  const {membersById,projectsById} = useSession();
+  const value = (field:string, data:unknown):string => {
+    if (data === null || data === undefined || data === '') return '—';
+    if (field === 'amount_cents' && typeof data === 'number') return (data/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    if (Array.isArray(data)) return data.length ? data.map(part => {
+      if (part && typeof part === 'object' && 'text' in part) return `${part.text}: ${part.done ? 'Concluído' : 'Pendente'}`;
+      if (part && typeof part === 'object' && 'title' in part) return `${part.title}: ${part.done ? 'Concluído' : 'Pendente'}`;
+      return value(field,part);
+    }).join(' · ') : 'Nenhum';
+    if (typeof data === 'object') return JSON.stringify(data,null,2);
+    const text = String(data);
+    if (['assignee_ids','owner_ids','member_id','schedule_member_id','owner_id'].includes(field)) return membersById[text]?.name ?? text;
+    if (field === 'project_id') return projectsById[text]?.name ?? text;
+    if (field === 'role') return roles[text] ?? text;
+    return businessLabels[text] ?? text;
+  };
+  const changes = Object.entries(item.details.changes ?? {});
+  return <div className="audit-detail-content">
+      <h3>{actions[item.action] ?? item.action} · {entities[item.entity] ?? item.entity}</h3>
+      <dl className="audit-detail-grid">
+        <div><dt>Quem realizou</dt><dd>{item.actorName}{item.actorEmail && <small>{item.actorEmail}</small>}{item.details.actorRole && <small>{roles[item.details.actorRole] ?? item.details.actorRole}</small>}</dd></div>
+        <div><dt>Data e horário de Brasília</dt><dd>{dateTime(item.createdAt)}</dd></div>
+        <div><dt>Registro afetado</dt><dd>{item.targetName || 'Sem nome'}<small>{item.entityId || '—'}</small></dd></div>
+        <div><dt>Resultado e origem</dt><dd>{outcomes[item.outcome] ?? item.outcome}<small>IP: {item.ip || 'Não disponível'}</small></dd></div>
+      </dl>
+      {changes.length > 0 ? <div className="audit-changes-scroll"><table className="audit-changes"><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>{changes.map(([field,change]) => <tr key={field}><th scope="row">{fieldNames[field] ?? field}</th><td>{value(field,change.before)}</td><td>{value(field,change.after)}</td></tr>)}</tbody></table></div> : <>
+        {item.details.fields?.length ? <p>Campos registrados: {item.details.fields.map(f => fieldNames[f] ?? f).join(', ')}.</p> : null}
+        {item.action !== 'acesso' && !['login','logout','ativacao'].includes(item.action) && <p className="muted small">Este registro não possui valores de antes e depois disponíveis. O histórico original foi preservado.</p>}
+      </>}
+      {item.details.passwordChanged && <p>Senha definida ou alterada. O conteúdo da senha não é registrado.</p>}
+      {item.details.route && <p className="muted small">{item.details.method} {item.details.route}{item.details.httpStatus ? ` · HTTP ${item.details.httpStatus}` : ''}</p>}
+      <small className="muted">Registro de auditoria #{item.id}{item.actorId ? ` · Autor: ${item.actorId}` : ' · Ação do sistema ou autor não autenticado'}</small>
   </div>;
 }

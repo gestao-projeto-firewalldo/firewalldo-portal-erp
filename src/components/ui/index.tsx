@@ -144,6 +144,8 @@ export function Modal({
     if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (e: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('.modal-root');
+      if (dialogs[dialogs.length - 1] !== ref.current?.closest('.modal-root')) return;
       if (e.key === 'Escape') closeRef.current();
       if (e.key !== 'Tab') return;
       const nodes = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([hidden]), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(el => el.getClientRects().length);

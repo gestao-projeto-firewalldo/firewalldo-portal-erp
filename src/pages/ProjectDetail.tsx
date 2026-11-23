@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Check, Flag, ListChecks, Plus, Users, Pencil } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CalendarDays, Check, Flag, ListChecks, Plus, Users, Pencil, Trash2 } from 'lucide-react';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Async, Avatar, AvatarStack, EmptyState, PriorityBadge, Progress, Skeleton } from '@/components/ui';
 import { ProjectIcon } from '@/components/shared';
 import { ProjectEditor } from '@/pages/Projects';
@@ -20,6 +21,19 @@ export default function ProjectDetail() {
   const openTask = useTaskEditor();
   const [editing,setEditing] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
+  const remove = async (name: string) => {
+    if (!await confirm({ title: 'Excluir projeto?', description: `Tem certeza que deseja excluir “${name}”? As tarefas, os tickets e as agendas serão mantidos sem projeto. O histórico de auditoria será preservado.`, confirmLabel: 'Excluir projeto' })) return;
+    setDeleting(true);
+    try {
+      await projectsService.remove(id);
+      toast({ tone: 'success', title: 'Projeto excluído', description: 'As tarefas e agendas foram mantidas sem projeto.' });
+      navigate('/projetos', { replace: true });
+    } catch (error) { toast({ tone: 'error', title: 'Não foi possível excluir', description: (error as Error).message }); }
+    finally { setDeleting(false); }
+  };
 
   return (
     <div className="page">
@@ -48,6 +62,7 @@ export default function ProjectDetail() {
                   </div>
                 </div>
                 {can('projetos.gerenciar') && <button className="btn" onClick={()=>setEditing(true)}><Pencil /> Editar projeto</button>}
+                {can('projetos.gerenciar') && <button className="btn danger" disabled={deleting} onClick={() => remove(p.name)}><Trash2 /> Excluir projeto</button>}
                 <div className="project-pct">
                   <b>{pct}%</b>
                   <div className="grow">

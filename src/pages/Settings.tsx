@@ -1,3 +1,4 @@
+import { useConfirm } from '@/context/ConfirmContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Bug, Check, KeyRound, Pencil, RotateCcw, Save } from 'lucide-react';
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const { me, can } = useSession();
   const { prefs, setPrefs } = usePrefs();
   const toast = useToast();
+  const confirm = useConfirm();
   const [params, setParams] = useSearchParams();
   const [editingProfile, setEditingProfile] = useState(params.get('perfil') === 'editar');
   const [tab, setTab] = useState<Tab>(() => (params.get('aba') === 'notificacoes' ? 'notificacoes' : 'geral'));
@@ -256,8 +258,8 @@ export default function SettingsPage() {
               </div>
               <button
                 className="btn danger"
-                onClick={() => {
-                  if (!confirm('Restaurar todos os dados de demonstração? As alterações locais serão perdidas.')) return;
+                onClick={async () => {
+                  if (!await confirm({title:'Restaurar demonstração?',description:'Restaurar todos os dados de demonstração? As alterações locais serão perdidas.',confirmLabel:'Restaurar'})) return;
                   mockDb.reset();
                   setPrefs(mockDb.get().preferences);
                   setPrefsDraft(mockDb.get().preferences);

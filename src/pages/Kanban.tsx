@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, UserRound } from 'lucide-react';
 import { Avatar, AvatarStack, EmptyState, ErrorState, PriorityBadge, Skeleton } from '@/components/ui';
 import { ProjectIcon } from '@/components/shared';
+import { TaskWorkflow } from '@/components/tasks/TaskWorkflow';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
@@ -131,28 +132,6 @@ function Board({
   onOpen: (t: Task) => void;
   onAccept: (t: Task) => void;
 }) {
-  const toast = useToast();
-  const { can } = useSession();
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [over, setOver] = useState<TaskStatus | null>(null);
-
-  const drop = async (e: DragEvent, col: TaskStatus) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain') || dragId;
-    setDragId(null);
-    setOver(null);
-    const t = tasks.find((x) => x.id === id);
-    if (!t || t.status === col) return;
-    const mine = !!meId && t.assigneeIds.includes(meId);
-    if (!can('tarefas.editar_todas') && !mine) {
-      toast({ tone: 'error', title: 'Sem permissão', description: 'Você só pode mover tarefas em que é responsável.' });
-      return;
-    }
-    try { await tasksService.move(t.id, col, null);
-    toast({ tone: col === 'concluido' ? 'celebrate' : 'info', title: col === 'concluido' ? 'Tarefa concluída' : `Movida para ${statusLabel[col]}`, description: t.title });
-    } catch(error) { toast({tone:'error',title:'Não foi possível mover a tarefa',description:(error as Error).message}); }
-  };
-
   return (
     <div className="board">
       {statusOrder.map((col) => {
@@ -160,14 +139,8 @@ function Board({
         return (
           <section
             key={col}
-            className={cx('column', over === col && 'over')}
+            className="column"
             style={{ '--c': statusColor[col] } as CSSProperties}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (over !== col) setOver(col);
-            }}
-            onDragLeave={(e) => !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node) && setOver(null)}
-            onDrop={(e) => drop(e, col)}
             aria-label={statusLabel[col]}
           >
             <header className="column-head">
@@ -177,7 +150,7 @@ function Board({
               {col === 'backlog' && <p>Vagas para aceitar</p>}
             </header>
             <div className="column-body">
-              {items.length === 0 && <div className="column-empty">{dragId ? 'Solte aqui' : 'Nenhuma tarefa'}</div>}
+              {items.length === 0 && <div className="column-empty">Nenhuma tarefa</div>}
               {items.map((t) => (
                 <TaskCard
                   key={t.id}
@@ -185,18 +158,8 @@ function Board({
                   meId={meId}
                   project={t.projectId ? projectsById[t.projectId] : undefined}
                   assignees={t.assigneeIds.map((id) => membersById[id]).filter(Boolean)}
-                  dragging={dragId === t.id}
                   onOpen={() => onOpen(t)}
                   onAccept={() => onAccept(t)}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', t.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                    setDragId(t.id);
-                  }}
-                  onDragEnd={() => {
-                    setDragId(null);
-                    setOver(null);
-                  }}
                 />
               ))}
             </div>
@@ -212,21 +175,15 @@ function TaskCard({
   meId,
   project,
   assignees,
-  dragging,
   onOpen,
   onAccept,
-  onDragStart,
-  onDragEnd,
 }: {
   task: Task;
   meId?: string;
   project?: Project;
   assignees: Member[];
-  dragging: boolean;
   onOpen: () => void;
   onAccept: () => void;
-  onDragStart: (e: DragEvent) => void;
-  onDragEnd: () => void;
 }) {
   const isBacklog = task.status === 'backlog';
   const done = task.status === 'concluido';
@@ -237,13 +194,10 @@ function TaskCard({
 
   return (
     <article
-      className={cx('task-card', dragging && 'dragging')}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      className="task-card"
       onClick={onOpen}
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onOpen()}
     >
       {ticketLabel(task)&&<span className="task-ticket">{ticketLabel(task)}</span>}
       <h4>{task.title}</h4>
@@ -303,6 +257,7 @@ function TaskCard({
           ) : null}
         </div>
       )}
+      {!isBacklog && <TaskWorkflow task={task} />}
     </article>
   );
 }

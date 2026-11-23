@@ -1,3 +1,4 @@
+import { useConfirm } from '@/context/ConfirmContext';
 import { useState, type CSSProperties } from 'react';
 import { Crown, Pencil, Plus, UserCheck, UserX, Users } from 'lucide-react';
 import { Avatar, EmptyState, SearchInput, Skeleton } from '@/components/ui';
@@ -11,6 +12,7 @@ import type { Member, Role } from '@/types/models';
 export default function UsersPage() {
   const { members, loading, me, can } = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<Role | ''>('');
   const [editor, setEditor] = useState<Member | 'new' | null>(null);
@@ -22,7 +24,7 @@ export default function UsersPage() {
     { label: 'Online agora', value: members.filter(m => m.active && m.status === 'online').length, icon: <i className="online-dot" />, c: 'var(--success)' },
   ];
   const toggle = async (member: Member) => {
-    if (member.active && !window.confirm(`Desativar o acesso de ${member.name}?`)) return;
+    if (member.active && !await confirm({title:'Desativar usuário?',description:`Desativar o acesso de ${member.name}?`,confirmLabel:'Desativar'})) return;
     setBusy(member.id);
     try { await membersService.update(member.id, { active: !member.active }); toast({ tone: 'success', title: member.active ? 'Usuário desativado' : 'Usuário reativado' }); }
     catch (err) { toast({ tone: 'error', title: 'Não foi possível atualizar', description: (err as Error).message }); }

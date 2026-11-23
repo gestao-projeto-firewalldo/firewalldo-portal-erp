@@ -1,3 +1,4 @@
+import { useConfirm } from '@/context/ConfirmContext';
 import { useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Pencil, Plus, Power, RefreshCw, Repeat2, Save, Search, Trash2, X } from 'lucide-react';
 import { Avatar, EmptyState, ErrorState, Modal, PriorityBadge, Skeleton } from '@/components/ui';
@@ -29,7 +30,8 @@ export default function Agenda(){
   const admin=can('tarefas.editar_todas');
   const query=useQuery(()=>agendaService.list(),[],15000);
   const tasks=useQuery(()=>tasksService.list(),[],15000);
-  const toast=useToast();const openTask=useTaskEditor();
+  const toast=useToast();
+  const confirm = useConfirm();const openTask=useTaskEditor();
   const [search,setSearch]=useState('');const [kind,setKind]=useState<''|ScheduleKind>('');
   const [person,setPerson]=useState('');const [editor,setEditor]=useState<TaskSchedule|'new'|null>(null);
   const [busy,setBusy]=useState('');
@@ -38,7 +40,7 @@ export default function Agenda(){
   const generated=(tasks.data??[]).filter(t=>t.scheduleId&&ids.has(t.scheduleId)&&(!person||t.assigneeIds.includes(person))).sort((a,b)=>(b.scheduledFor??'').localeCompare(a.scheduledFor??''));
   const upcoming=selected.filter(s=>s.active&&s.upcoming.length>0).sort((a,b)=>a.upcoming[0].localeCompare(b.upcoming[0]));
   const change=async(s:TaskSchedule,remove=false)=>{
-    if(remove&&!confirm(`Remover a agenda “${s.title}”? As tarefas já liberadas serão mantidas.`))return;
+    if(remove&&!await confirm({title:'Remover agenda?',description:`Remover a agenda “${s.title}”? As tarefas já liberadas serão mantidas.`,confirmLabel:'Remover'}))return;
     setBusy(s.id);
     try{if(remove)await agendaService.remove(s.id);else await agendaService.active(s.id,!s.active);toast({tone:'success',title:remove?'Agenda removida':s.active?'Agenda pausada':'Agenda ativada'});}
     catch(e){toast({tone:'error',title:'Não foi possível alterar',description:(e as Error).message});}finally{setBusy('');}

@@ -4,6 +4,7 @@ import { AuthGate } from '@/context/AuthGate';
 import { PrefsProvider } from '@/context/PrefsContext';
 import { SessionProvider } from '@/context/SessionContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { ConfirmProvider } from '@/context/ConfirmContext';
 import { TaskEditorProvider } from '@/components/tasks/TaskEditor';
 import { EmptyState } from '@/components/ui';
 import Dashboard from '@/pages/Dashboard';
@@ -25,6 +26,7 @@ export default function App() {
   return (
     <PrefsProvider>
       <ToastProvider>
+        <ConfirmProvider>
         <AuthGate>
           <SessionProvider>
             <TaskEditorProvider>
@@ -65,6 +67,7 @@ export default function App() {
             </TaskEditorProvider>
           </SessionProvider>
         </AuthGate>
+        </ConfirmProvider>
       </ToastProvider>
     </PrefsProvider>
   );

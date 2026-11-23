@@ -1,3 +1,4 @@
+import { TaskWorkflow } from '@/components/tasks/TaskWorkflow';
 import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, CheckCircle2, CircleCheck, Info, Layers, Newspaper, Pencil, Plus, RefreshCw, SquareCheck, Users } from 'lucide-react';
@@ -236,16 +237,14 @@ export default function Dashboard() {
                 {mine.map((t) => {
                   const late = t.dueDate && daysUntil(t.dueDate) < 0;
                   return (
-                    <div key={t.id} className="list-row dashboard-task" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => openTask({ task: t })} onKeyDown={(e) => e.key === 'Enter' && openTask({ task: t })}>
-                      <label className="check" onClick={(e) => e.stopPropagation()} title="Marcar como concluída">
-                        <input type="checkbox" onChange={async () => {try{await tasksService.move(t.id,'concluido',null);}catch(error){toast({tone:'error',title:'Não foi possível concluir',description:(error as Error).message});}}} />
-                      </label>
+                    <div key={t.id} className="list-row dashboard-task" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => openTask({ task: t })} onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && openTask({ task: t })}>
                       <div className="grow">
                         <div className="ellipsis" style={{ fontWeight: 600 }}>{ticketLabel(t)} {t.title}</div>
                         <div className="muted small ellipsis">
                           {t.projectId ? projectsById[t.projectId]?.name : 'Geral'} · {categoryLabel[t.category]}
                         </div>
                       </div>
+                      <TaskWorkflow task={t} />
                       <PriorityBadge p={t.priority} />
                       <span className={cx('small task-date', late ? 'late' : 'muted')} style={{ width: 52, textAlign: 'right' }}>{shortDate(t.dueDate)}</span>
                     </div>
