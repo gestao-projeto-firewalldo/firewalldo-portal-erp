@@ -40,3 +40,11 @@ A versão 1.6 reorganiza o mobile (fontes, históricos, painéis, filtros e moda
 ## Revisão 1.7 — Agenda e tickets
 
 Regras persistentes diárias/a cada N dias, semanais e por datas selecionadas. A API libera tarefas individuais por responsável e horário de Brasília, sem antecipar a criação. Contador transacional global identifica cada tarefa manual/automática com ticket próprio, sem renumerar edições ou reaproveitar excluídos. V6 mantém V1–V5 intactas. Usuários recebem somente suas tarefas pela API; administradores podem filtrar todos ou cada responsável. A versão aparece ao lado do sino. Consulte ../REVISAO-1.7.md e ../ATUALIZAR-CMD.md.
+
+
+## Portal 1.1.11
+
+- Capa das notícias por arraste: solte uma imagem PNG, JPG ou WEBP na janela de cadastro/edição para carregar a prévia e publicar. O seletor de arquivos continua disponível. Arquivos inválidos não substituem a capa atual nem abrem outra página.
+- Backlog com seleção de quem pode aceitar, separada dos aceites confirmados e do número de vagas necessárias para iniciar. Sem seleção, qualquer conta ativa pode aceitar.
+- Até três fotos redondas sobrepostas, sem bordas; nomes dos três primeiros participantes e lista completa ao passar o mouse, focar com teclado ou tocar.
+- No tema claro, coluna Em andamento em amarelo opaco e cartões amarelos mais claros. As cores do tema escuro foram mantidas.

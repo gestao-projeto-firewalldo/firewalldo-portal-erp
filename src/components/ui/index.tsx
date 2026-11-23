@@ -79,32 +79,37 @@ export function Avatar({
   member,
   size = 36,
   showStatus,
+  style,
 }: {
   member: Pick<Member, 'name' | 'initials' | 'color' | 'avatarUrl'> & { status?: PresenceStatus };
   size?: number;
   showStatus?: boolean;
+  style?: CSSProperties;
 }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [member.avatarUrl]);
+  const photo = !!member.avatarUrl && !failed;
   return (
     <span
-      className="avatar"
-      style={{ '--s': `${size}px`, '--c': member.color } as CSSProperties}
+      className={cx('avatar', photo && 'has-photo')}
+      style={{ '--s': `${size}px`, '--c': member.color, ...style } as CSSProperties}
       title={member.name}
     >
-      {member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : member.initials}
+      {photo ? <img src={member.avatarUrl ?? undefined} alt="" onError={() => setFailed(true)} /> : member.initials}
       {showStatus && member.status && <i className={cx('status', `st-${member.status}`)} />}
     </span>
   );
 }
 
-export function AvatarStack({ members, size = 28, max = 4 }: { members: Member[]; size?: number; max?: number }) {
+export function AvatarStack({ members, size = 28, max = 3, showOverflow = true }: { members: Member[]; size?: number; max?: number; showOverflow?: boolean }) {
   const shown = members.slice(0, max);
   const rest = members.length - shown.length;
   return (
     <span className="avatar-stack">
-      {shown.map((m) => (
-        <Avatar key={m.id} member={m} size={size} />
+      {shown.map((m, index) => (
+        <Avatar key={m.id} member={m} size={size} style={{ zIndex: index + 1 }} />
       ))}
-      {rest > 0 && (
+      {showOverflow && rest > 0 && (
         <span className="avatar" style={{ '--s': `${size}px`, '--c': 'var(--surface-3)', color: 'var(--text)' } as CSSProperties}>
           +{rest}
         </span>

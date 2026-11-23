@@ -67,7 +67,7 @@ function AuditList() {
 
 const roles: Record<string,string> = {superadmin:'Administrador principal',admin:'Administrador',usuario:'Usuário'};
 const businessLabels: Record<string,string> = {backlog:'Backlog',a_fazer:'A fazer',em_andamento:'Em andamento',concluido:'Concluída',planejamento:'Planejamento',pausado:'Pausado',baixa:'Baixa',media:'Média',alta:'Alta',critica:'Crítica',true:'Sim',false:'Não'};
-Object.assign(fieldNames, {actor_id:'autor',project_id:'projeto',priority:'prioridade',brand:'marca',subtitle:'subtítulo',finance_access:'acesso ao financeiro',start_date:'início',end_date:'fim',slot:'posição da notícia',source_name:'fonte',amount_cents:'valor',billing:'cobrança',frequency:'frequência',due_day:'dia de vencimento',payment_method:'forma de pagamento',kind:'tipo',beneficiary:'beneficiário',paid_at:'data do pagamento',attachment_name:'anexo',receipt_name:'comprovante',foto:'foto de perfil'});
+Object.assign(fieldNames, {eligible_assignee_ids:'pessoas que podem aceitar',actor_id:'autor',project_id:'projeto',priority:'prioridade',brand:'marca',subtitle:'subtítulo',finance_access:'acesso ao financeiro',start_date:'início',end_date:'fim',slot:'posição da notícia',source_name:'fonte',amount_cents:'valor',billing:'cobrança',frequency:'frequência',due_day:'dia de vencimento',payment_method:'forma de pagamento',kind:'tipo',beneficiary:'beneficiário',paid_at:'data do pagamento',attachment_name:'anexo',receipt_name:'comprovante',foto:'foto de perfil'});
 
 function AuditRow({item}:{item:AuditEntry}) {
   const [expanded,setExpanded] = useState(false);
@@ -94,7 +94,7 @@ function AuditDetails({item}:{item:AuditEntry}) {
     }).join(' · ') : 'Nenhum';
     if (typeof data === 'object') return JSON.stringify(data,null,2);
     const text = String(data);
-    if (['assignee_ids','owner_ids','member_id','schedule_member_id','owner_id'].includes(field)) return membersById[text]?.name ?? text;
+    if (['eligible_assignee_ids','assignee_ids','owner_ids','member_id','schedule_member_id','owner_id'].includes(field)) return membersById[text]?.name ?? text;
     if (field === 'project_id') return projectsById[text]?.name ?? text;
     if (field === 'role') return roles[text] ?? text;
     return businessLabels[text] ?? text;

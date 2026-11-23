@@ -8,7 +8,7 @@
  * As regras de negócio aplicadas aqui no mock (ex.: limite de vagas) devem ser
  * replicadas/validadas no servidor — o front não é fonte de verdade.
  */
-import { canMoveTask, taskSteps } from '@/lib/taskWorkflow';
+import { canMoveTask, taskSteps, isEligible } from '@/lib/taskWorkflow';
 import { appConfig } from '@/config';
 import { http, mockDb, simulate, today, uid, useApi, ServiceError } from './core';
 import type {
@@ -184,7 +184,7 @@ export const tasksService = {
   /** API: GET /tasks   (filtros opcionais: ?projectId=&assigneeId=&status=) */
   async list(): Promise<Task[]> {
     if (useApi()) return http.get('/tasks');
-    return simulate(() => [...db().tasks].sort((a, b) => a.order - b.order));
+    return simulate(() => [...db().tasks].filter(task => db().viewAsRole !== 'usuario' || task.assigneeIds.includes(db().currentUserId) || (task.status==='backlog' && task.open && isEligible(task,db().currentUserId))).sort((a, b) => a.order - b.order));
   },
   /** Criar tarefa (admin, dentro de um projeto). API: POST /tasks */
   async create(input: TaskInput): Promise<Task> {
@@ -193,6 +193,9 @@ export const tasksService = {
     if (!['backlog', 'a_fazer'].includes(input.status)) throw new ServiceError('Crie a tarefa no Backlog ou em A fazer.', 'INVALID_INPUT');
     const task: Task = {
       ...input,
+      eligibleAssigneeIds: input.eligibleAssigneeIds ?? (input.status==='backlog' ? input.assigneeIds : []),
+      assigneeIds: input.status==='backlog' ? [] : input.assigneeIds,
+      open: input.status==='backlog',
       id: uid('t'),
       createdBy: s.currentUserId,
       createdAt: today(),
@@ -209,9 +212,15 @@ export const tasksService = {
     if (useApi()) return http.patch(`/tasks/${id}`, patch);
     const current = db().tasks.find(t => t.id === id);
     if (current && patch.status && patch.status !== current.status) validateMockTransition(current, patch.status);
+    if (current?.status==='backlog' && patch.assigneeIds && JSON.stringify(patch.assigneeIds)!==JSON.stringify(current.assigneeIds)) throw new ServiceError('Os responsáveis do Backlog são definidos pelos aceites.', 'INVALID_INPUT');
+    if (current && current.assigneeIds.length>(patch.maxAssignees??current.maxAssignees)) throw new ServiceError('O limite não pode ser menor que o número de aceites confirmados.','INVALID_INPUT');
     mockDb.update((d) => {
       const t = d.tasks.find((x) => x.id === id);
-      if (t) Object.assign(t, patch, { updatedAt: today() });
+      if (t) {
+        Object.assign(t, patch, { updatedAt: today() });
+        t.open=t.status==='backlog' && t.assigneeIds.length<t.maxAssignees;
+        if(t.status==='backlog' && t.assigneeIds.length===t.maxAssignees)t.status='a_fazer';
+      }
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },
@@ -242,7 +251,9 @@ export const tasksService = {
     if (useApi()) return http.post(`/tasks/${id}/accept`, {});
     const t0 = db().tasks.find((x) => x.id === id);
     if (!t0) throw new ServiceError('Tarefa não encontrada.', 'NOT_FOUND');
-    if (!t0.open || t0.assigneeIds.length >= t0.maxAssignees) throw new ServiceError('Não há vagas nesta tarefa.', 'NO_SLOTS');
+    if (t0.assigneeIds.includes(db().currentUserId)) return simulate(() => t0);
+    if (!isEligible(t0,db().currentUserId)) throw new ServiceError('Você não está na lista de pessoas que podem aceitar.', 'FORBIDDEN');
+    if (t0.status!=='backlog' || !t0.open || t0.assigneeIds.length >= t0.maxAssignees) throw new ServiceError('Não há vagas nesta tarefa.', 'NO_SLOTS');
     mockDb.update((d) => {
       const t = d.tasks.find((x) => x.id === id)!;
       if (!t.assigneeIds.includes(d.currentUserId)) t.assigneeIds.push(d.currentUserId);
@@ -261,6 +272,7 @@ export const tasksService = {
       const t = d.tasks.find((x) => x.id === id);
       if (!t) return;
       t.assigneeIds = t.assigneeIds.filter((a) => a !== d.currentUserId);
+      t.open=t.status==='backlog';
     });
     return simulate(() => db().tasks.find((x) => x.id === id)!);
   },

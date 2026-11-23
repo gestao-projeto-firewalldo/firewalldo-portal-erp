@@ -85,7 +85,17 @@ function load(): MockState {
   return seedState();
 }
 
-let state: MockState = load();
+function normalizeEnrollment(value: MockState): MockState {
+  value.tasks.forEach(task => {
+    task.eligibleAssigneeIds ??= [];
+    if(task.status==='backlog') {
+      task.open=task.assigneeIds.length<task.maxAssignees;
+      if(!task.open)task.status='a_fazer';
+    }
+  });
+  return value;
+}
+let state: MockState = normalizeEnrollment(load());
 const listeners = new Set<() => void>();
 
 export const mockDb = {
@@ -102,7 +112,7 @@ export const mockDb = {
     listeners.forEach((l) => l());
   },
   reset() {
-    state = seedState();
+    state = normalizeEnrollment(seedState());
     try {
       localStorage.removeItem(appConfig.storageKey);
     } catch {

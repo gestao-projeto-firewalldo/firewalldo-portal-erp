@@ -69,7 +69,9 @@ export interface Task {
   status: TaskStatus;
   priority: Priority;
   assigneeIds: ID[];
-  /** Tarefa aberta: qualquer usuário pode aceitar enquanto houver vaga. */
+  /** Pessoas autorizadas a aceitar. Vazio = qualquer usuário ativo. Não ocupa vagas. */
+  eligibleAssigneeIds?: ID[];
+  /** Inscrição aberta no Backlog, até atingir o número de aceites. */
   open: boolean;
   /** Limite de responsáveis ("Lim. 1/3" = 1 aceitou de 3 vagas). */
   maxAssignees: number;

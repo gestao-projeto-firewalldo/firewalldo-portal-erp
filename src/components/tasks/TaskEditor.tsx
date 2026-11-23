@@ -1,3 +1,5 @@
+import { canAcceptTask } from '@/lib/taskWorkflow';
+import { TaskPeople } from '@/components/tasks/TaskPeople';
 import { TaskWorkflow } from '@/components/tasks/TaskWorkflow';
 import { useConfirm } from '@/context/ConfirmContext';
 import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
@@ -23,6 +25,7 @@ const blank: TaskInput = {
   status: 'a_fazer',
   priority: 'media',
   assigneeIds: [],
+  eligibleAssigneeIds: [],
   open: false,
   maxAssignees: 3,
   dueDate: null,
@@ -62,18 +65,31 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
   const editable = existing ? canEditAll : canCreate;
 
   const [form, setForm] = useState<TaskInput>(() => ({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) }));
+  const [restricted, setRestricted] = useState(!!existing?.eligibleAssigneeIds?.length);
+  const isBacklog = form.status === 'backlog';
   const [newItem, setNewItem] = useState('');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    setRestricted(!!existing?.eligibleAssigneeIds?.length);
     setForm({ ...blank, ...editableTask(existing), ...(args.prefill ?? {}), ...(!existing && args.prefill?.projectId && !args.prefill.category && projects.find(p=>p.id===args.prefill?.projectId)?.category ? {category:projects.find(p=>p.id===args.prefill?.projectId)!.category!} : {}) });
   }, [existing, args.prefill]);
 
   const set = <K extends keyof TaskInput>(k: K, v: TaskInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const toggleAssignee = (id: string) =>
-    !existing?.scheduleId && set('assigneeIds', form.assigneeIds.includes(id) ? form.assigneeIds.filter((x) => x !== id) : [...form.assigneeIds, id]);
+  const toggleAssignee = (id: string) => {
+    if (existing?.scheduleId) return;
+    const field = isBacklog ? 'eligibleAssigneeIds' : 'assigneeIds';
+    const ids = form[field] ?? [];
+    set(field, ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id]);
+  };
+  const changeInitialStatus = (status: TaskInput['status']) => {
+    if (status==='backlog' && form.assigneeIds.length) setRestricted(true);
+    setForm(value => status === 'backlog'
+      ? {...value,status,open:true,eligibleAssigneeIds:value.assigneeIds.length ? value.assigneeIds : value.eligibleAssigneeIds,assigneeIds:[]}
+      : {...value,status,open:false});
+  };
 
   const toggleItem = async (item: ChecklistItem) => {
     const next = form.checklist.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c));
@@ -92,20 +108,24 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
     if(date && !date.checkValidity()){date.reportValidity();setErrors({dueDate:date.validationMessage});return;}
     const e: Record<string, string> = {};
     if (form.title.trim().length < 3) e.title = 'Informe um título com pelo menos 3 caracteres.';
-    if (!form.open && form.assigneeIds.length === 0 && form.status !== 'backlog')
-      e.assignees = 'Atribua um responsável ou marque como tarefa aberta.';
+    if (!isBacklog && form.assigneeIds.length === 0)
+      e.assignees = 'Atribua um responsável ou crie a tarefa no Backlog para receber aceites.';
     if (form.assigneeIds.length > form.maxAssignees)
       e.assignees = `Há ${form.assigneeIds.length} responsáveis para ${form.maxAssignees} vaga(s). Aumente o limite.`;
+    if (isBacklog && restricted && !form.eligibleAssigneeIds?.length) e.eligible = 'Selecione pelo menos uma pessoa ou permita que qualquer pessoa aceite.';
     setErrors(e);
     if (Object.keys(e).length) return;
     setSaving(true);
     try {
       if (existing) {
         const { status, ...metadata } = form;
-        await tasksService.update(existing.id, metadata);
+        const payload: Partial<TaskInput> = {...metadata,open:isBacklog && form.assigneeIds.length<form.maxAssignees,
+          eligibleAssigneeIds:isBacklog && !restricted ? [] : form.eligibleAssigneeIds ?? []};
+        if (isBacklog) delete payload.assigneeIds;
+        await tasksService.update(existing.id, payload);
         toast({ tone: 'success', title: 'Tarefa atualizada', description: form.title });
       } else {
-        await tasksService.create(form);
+        await tasksService.create({...form,open:isBacklog,eligibleAssigneeIds:isBacklog && restricted ? form.eligibleAssigneeIds ?? [] : [],assigneeIds:isBacklog ? [] : form.assigneeIds});
         toast({ tone: 'success', title: 'Tarefa criada', description: `${form.title} · ${statusLabel[form.status]}` });
       }
       onClose();
@@ -142,7 +162,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
         icon={<span className="icon-tile"><ListChecks /></span>}
         footer={
           <>
-            {existing.status === 'backlog' && existing.open && !isAssignee && existing.assigneeIds.length < existing.maxAssignees && (
+            {canAcceptTask(existing,me?.id) && (
               <button className="btn primary" onClick={accept}>
                 <Hand /> Aceitar tarefa
               </button>
@@ -160,6 +180,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <span className="badge outline"><CalendarDays /> {shortDate(existing.dueDate)}</span>
           )}
         </div>
+        {isBacklog && <div className="notice backlog-editor-note">{existing.assigneeIds.length} de {existing.maxAssignees} aceites confirmados. A tarefa só vai para A fazer quando todas as vagas forem preenchidas.</div>}
         <TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} />
         <p className="muted" style={{ marginBottom: 16 }}>{existing.description || 'Sem descrição.'}</p>
         <div className="label" style={{ marginBottom: 8 }}>Responsáveis</div>
@@ -203,6 +224,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
       icon={<span className="icon-tile"><CheckSquare /></span>}
       footer={
         <>
+          {existing && canAcceptTask(existing,me?.id) && <button className="btn primary" onClick={accept}><Hand/> Aceitar tarefa</button>}
           {existing && (
             <button className="btn danger" onClick={remove} style={{ marginRight: 'auto' }}>
               <Trash2 /> Excluir
@@ -247,7 +269,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </div>
           <div className="field">
             <label htmlFor="t-st">Status</label>
-            {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} /></> : <select id="t-st" className="select" value={form.status} onChange={e => set('status', e.target.value as TaskInput['status'])}>
+            {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} /></> : <select id="t-st" className="select" value={form.status} onChange={e => changeInitialStatus(e.target.value as TaskInput['status'])}>
               {statusOrder.filter(s => s === 'backlog' || s === 'a_fazer').map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
             </select>}
           </div>
@@ -262,41 +284,39 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             <FormDateInput id="t-due" value={form.dueDate} onChange={iso => set('dueDate', iso || null)} />
           </div>
           <div className="field">
-            <label htmlFor="t-max">Vagas (limite de responsáveis)</label>
+            <label htmlFor="t-max">{isBacklog ? 'Vagas necessárias para iniciar' : 'Limite de responsáveis'}</label>
             <input
               id="t-max" disabled={!!existing?.scheduleId}
               type="number"
               min={1}
-              max={20}
+              max={100}
               className="input"
               value={form.maxAssignees}
-              onChange={(e) => set('maxAssignees', Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              onChange={(e) => set('maxAssignees', Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
             />
           </div>
-          <div className="field full">
-            <label className="check">
-              <input type="checkbox" className="switch" disabled={!!existing?.scheduleId} checked={form.open} onChange={(e) => set('open', e.target.checked)} />
-              <span>Tarefa aberta: usuários podem aceitar enquanto houver vaga (aparece no Backlog)</span>
-            </label>
-          </div>
-          <div className="field full">
-            <span className="label">Responsáveis</span>
-            <div className="chips">
-              {members.filter(m=>m.active || form.assigneeIds.includes(m.id)).map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={cx('chip', form.assigneeIds.includes(m.id) && 'active')}
-                  disabled={!!existing?.scheduleId} aria-label={`Atribuir ${m.name}`} aria-pressed={form.assigneeIds.includes(m.id)}
-                  onClick={() => toggleAssignee(m.id)}
-                  style={{ paddingLeft: 4 }}
-                >
-                  <Avatar member={m} size={26} /> {m.name.split(' ')[0]}
-                </button>
-              ))}
+          {isBacklog ? <>
+            <div className="notice full backlog-editor-note">O limite conta somente os aceites confirmados. Você pode convidar mais pessoas que o número de vagas; as primeiras que aceitarem ficam com a tarefa.</div>
+            <div className="field full">
+              <span className="label">Quem pode aceitar</span>
+              <div className="row" style={{flexWrap:'wrap',gap:16}}>
+                <label className="check"><input type="radio" name="task-eligibility" checked={!restricted} onChange={() => {setRestricted(false);set('eligibleAssigneeIds',[]);}}/> Qualquer pessoa</label>
+                <label className="check"><input type="radio" name="task-eligibility" checked={restricted} onChange={() => setRestricted(true)}/> Pessoas selecionadas</label>
+              </div>
+              {restricted && <div className="chips">{members.filter(member => member.active || form.eligibleAssigneeIds?.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.eligibleAssigneeIds?.includes(member.id)&&'active')} aria-label={`Pode aceitar: ${member.name}`} aria-pressed={!!form.eligibleAssigneeIds?.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>}
+              <span className="muted small">{restricted ? `${form.eligibleAssigneeIds?.length ?? 0} pessoa(s) podem aceitar; ${form.maxAssignees} aceite(s) necessários para iniciar.` : 'Qualquer usuário ativo pode aceitar enquanto houver vaga.'}</span>
+              {errors.eligible && <span className="form-error small">{errors.eligible}</span>}
             </div>
-            {errors.assignees && <span className="small" style={{ color: 'var(--danger)' }}>{errors.assignees}</span>}
-          </div>
+            <div className="field full">
+              <span className="label">Aceites confirmados · {form.assigneeIds.length}/{form.maxAssignees}</span>
+              {form.assigneeIds.length ? <TaskPeople members={form.assigneeIds.map(id => membersById[id]).filter(Boolean)}/> : <span className="muted small">Ninguém aceitou ainda. Convidar alguém não ocupa uma vaga.</span>}
+              {errors.assignees && <span className="form-error small">{errors.assignees}</span>}
+            </div>
+          </> : <div className="field full">
+            <span className="label">Responsáveis</span>
+            <div className="chips">{members.filter(member => member.active || form.assigneeIds.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.assigneeIds.includes(member.id)&&'active')} disabled={!!existing?.scheduleId} aria-label={`Atribuir ${member.name}`} aria-pressed={form.assigneeIds.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>
+            {errors.assignees && <span className="form-error small">{errors.assignees}</span>}
+          </div>}
           <div className="field full">
             <div className="row">
               <span className="label">Checklist e subtarefas</span>

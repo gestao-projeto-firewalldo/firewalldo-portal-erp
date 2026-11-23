@@ -1,5 +1,14 @@
 import type { Member, Task, TaskStatus } from '@/types/models';
 
+export function isEligible(task: Pick<Task, 'eligibleAssigneeIds'>, memberId?: string) {
+  return !!memberId && (!task.eligibleAssigneeIds?.length || task.eligibleAssigneeIds.includes(memberId));
+}
+
+export function canAcceptTask(task: Task, memberId?: string) {
+  return task.status === 'backlog' && task.open && task.assigneeIds.length < task.maxAssignees
+    && isEligible(task, memberId) && !task.assigneeIds.includes(memberId ?? '');
+}
+
 export function canMoveTask(task: Task, member?: Pick<Member, 'id' | 'role'>) {
   return !!member && (member.role === 'superadmin' || task.assigneeIds.includes(member.id));
 }

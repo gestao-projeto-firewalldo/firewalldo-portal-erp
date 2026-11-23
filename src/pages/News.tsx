@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ExternalLink, FilePlus2, ImagePlus, Newspaper, Pencil, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { Async, ConfirmDialog, EmptyState, Modal, Skeleton } from '@/components/ui';
@@ -238,6 +238,8 @@ function NewsEditor({ item, initialSlot, used, onClose }: { item?: NewsItem; ini
   /** undefined = manter a atual; "" = remover; data URL = nova imagem. */
   const [image, setImage] = useState<string | undefined>(undefined);
   const [preparing, setPreparing] = useState(false);
+  const [draggingImage, setDraggingImage] = useState(false);
+  const preparingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -246,15 +248,60 @@ function NewsEditor({ item, initialSlot, used, onClose }: { item?: NewsItem; ini
   const needsImage = form.slot !== 'geral';
   const available = (s: NewsSlot) => s === item?.slot || used[s] < NEWS_LIMITS[s];
 
-  const pick = async (file?: File) => {
-    if (!file) return;
+  const pick = useCallback(async (file?: File) => {
+    if (!file || preparingRef.current) return;
+    preparingRef.current = true;
     setPreparing(true); setError('');
     try { setImage(await resizeImage(file, 1920, 1_800_000)); }
     catch (e) { setError((e as Error).message); }
-    finally { setPreparing(false); if (fileRef.current) fileRef.current.value = ''; }
-  };
+    finally { preparingRef.current = false; setPreparing(false); if (fileRef.current) fileRef.current.value = ''; }
+  }, []);
+
+  // Enquanto o editor está aberto, soltar um arquivo nunca deve navegar para ele.
+  // Aceitamos a capa em qualquer parte da janela, inclusive sobre os campos.
+  useEffect(() => {
+    let depth = 0;
+    const isFile = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
+    const enter = (e: DragEvent) => {
+      if (!isFile(e)) return;
+      e.preventDefault();
+      depth += 1;
+      if (needsImage && !saving && !preparingRef.current) setDraggingImage(true);
+    };
+    const over = (e: DragEvent) => {
+      if (!isFile(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = needsImage && !saving && !preparingRef.current ? 'copy' : 'none';
+    };
+    const leave = (e: DragEvent) => {
+      if (!isFile(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth || !e.relatedTarget) setDraggingImage(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!isFile(e)) return;
+      e.preventDefault();
+      depth = 0; setDraggingImage(false);
+      if (saving || preparingRef.current) return;
+      if (!needsImage) return setError('Escolha a categoria Principal ou Secundária para enviar uma capa.');
+      const files = e.dataTransfer?.files;
+      if (!files || files.length !== 1) return setError('Arraste apenas uma imagem de capa por vez.');
+      void pick(files[0]);
+    };
+    window.addEventListener('dragenter', enter, true);
+    window.addEventListener('dragover', over, true);
+    window.addEventListener('dragleave', leave, true);
+    window.addEventListener('drop', drop, true);
+    return () => {
+      window.removeEventListener('dragenter', enter, true);
+      window.removeEventListener('dragover', over, true);
+      window.removeEventListener('dragleave', leave, true);
+      window.removeEventListener('drop', drop, true);
+    };
+  }, [needsImage, saving, pick]);
 
   const save = async () => {
+    if (preparingRef.current || saving) return;
     setError('');
     if (form.title.trim().length < 3) return setError('Informe o título da notícia (mínimo de 3 caracteres).');
     if (form.summary.trim().length < 10) return setError('Informe o resumo (mínimo de 10 caracteres).');
@@ -322,17 +369,21 @@ function NewsEditor({ item, initialSlot, used, onClose }: { item?: NewsItem; ini
         {needsImage && (
           <div className="field full">
             <label>Imagem de capa *</label>
-            <div className="news-image-field">
+            <div className={cx('news-image-field', draggingImage && 'dragging')} aria-busy={preparing}>
+              <div className="news-image-target">
               {preview ? (
                 <div className="news-image-preview"><img src={preview} alt="Pré-visualização da capa" /></div>
               ) : (
-                <button type="button" className="news-image-drop" onClick={() => fileRef.current?.click()} disabled={preparing}>
-                  <ImagePlus /> {preparing ? 'Preparando…' : 'Escolher imagem do computador ou celular'}
+                <button type="button" className="news-image-drop" onClick={() => fileRef.current?.click()} disabled={preparing || saving}>
+                  <ImagePlus /> {preparing ? 'Preparando…' : 'Arraste a imagem aqui ou clique para escolher'}
                 </button>
               )}
+              {draggingImage && <div className="news-image-drop-hint"><ImagePlus /> Solte para carregar a capa</div>}
+              </div>
+              <span className="muted small" role="status">{preparing ? 'Preparando imagem…' : preview ? 'Capa carregada. Arraste outra imagem para trocar.' : 'Você também pode arrastar uma imagem para esta janela.'}</span>
               <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-                <button type="button" className="btn sm" onClick={() => fileRef.current?.click()} disabled={preparing}><ImagePlus size={16} /> {preview ? 'Trocar imagem' : 'Enviar imagem'}</button>
-                {preview && <button type="button" className="btn sm ghost" onClick={() => setImage('')}><X size={16} /> Remover</button>}
+                <button type="button" className="btn sm" onClick={() => fileRef.current?.click()} disabled={preparing || saving}><ImagePlus size={16} /> {preview ? 'Trocar imagem' : 'Enviar imagem'}</button>
+                {preview && <button type="button" className="btn sm ghost" onClick={() => setImage('')} disabled={preparing || saving}><X size={16} /> Remover</button>}
                 <span className="muted small">PNG, JPG ou WEBP. Prefira imagens horizontais (16:9).</span>
               </div>
             </div>

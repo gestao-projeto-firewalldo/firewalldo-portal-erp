@@ -1,7 +1,9 @@
+import { TaskPeople } from '@/components/tasks/TaskPeople';
+import { canAcceptTask, isEligible } from '@/lib/taskWorkflow';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, UserRound } from 'lucide-react';
-import { Avatar, AvatarStack, EmptyState, ErrorState, PriorityBadge, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, PriorityBadge, Skeleton } from '@/components/ui';
 import { ProjectIcon } from '@/components/shared';
 import { TaskWorkflow } from '@/components/tasks/TaskWorkflow';
 import { useTaskEditor } from '@/components/tasks/TaskEditor';
@@ -10,7 +12,7 @@ import { useToast } from '@/context/ToastContext';
 import { useQuery } from '@/hooks/useQuery';
 import { tasksService } from '@/services';
 import { cx, daysUntil, shortDate, statusColor, statusLabel, statusOrder, ticketLabel } from '@/lib/labels';
-import type { Member, Project, Task, TaskStatus } from '@/types/models';
+import type { Member, Project, Task } from '@/types/models';
 
 type View = 'kanban' | 'lista' | 'calendario';
 const views: { id: View; label: string }[] = [
@@ -60,6 +62,7 @@ export default function Tasks() {
       await tasksService.accept(t.id);
       toast({ tone: 'success', title: 'Você aceitou a tarefa', description: t.title });
     } catch (e) {
+      q.refetch();
       toast({ tone: 'error', title: 'Não foi possível aceitar', description: (e as Error).message });
     }
   };
@@ -139,6 +142,7 @@ function Board({
         return (
           <section
             key={col}
+            data-status={col}
             className="column"
             style={{ '--c': statusColor[col] } as CSSProperties}
             aria-label={statusLabel[col]}
@@ -190,7 +194,7 @@ function TaskCard({
   const full = task.assigneeIds.length >= task.maxAssignees;
   const accepted = !!meId && task.assigneeIds.includes(meId);
   const late = task.dueDate && !done && daysUntil(task.dueDate) < 0;
-  const first = assignees[0];
+  const eligible = isEligible(task, meId);
 
   return (
     <article
@@ -210,42 +214,26 @@ function TaskCard({
       {isBacklog ? (
         <>
           <div className="tc-row">
-            {assignees.length > 0 ? (
-              <span className="row" style={{ gap: 8 }}>
-                <AvatarStack members={assignees} size={28} max={3} />
-                {assignees.length} aceit{assignees.length > 1 ? 'aram' : 'ou'}
-              </span>
-            ) : (
-              <span className="row muted" style={{ gap: 8 }}>
-                <UserRound size={18} /> Sem responsável
-              </span>
-            )}
+            {assignees.length > 0 ? <TaskPeople members={assignees} /> : <span className="row muted" style={{gap:8}}><UserRound size={18} /> Aguardando aceites</span>}
             <span className="lim">
-              Lim. {task.assigneeIds.length}/{task.maxAssignees}
+              Aceites {task.assigneeIds.length}/{task.maxAssignees}
             </span>
           </div>
           <button
             className="btn accept"
-            disabled={accepted || full || !task.open}
+            disabled={!canAcceptTask(task, meId)}
             onClick={(e) => {
               e.stopPropagation();
               onAccept();
             }}
           >
-            {accepted ? 'Você aceitou' : full ? 'Sem vagas' : 'Aceitar tarefa'}
+            {accepted ? 'Você aceitou' : full ? 'Vagas preenchidas' : !eligible ? 'Disponível para pessoas selecionadas' : 'Aceitar tarefa'}
           </button>
+          <p className="backlog-enrollment-note">{task.eligibleAssigneeIds?.length ? `${task.eligibleAssigneeIds.length} pessoa(s) podem aceitar` : 'Qualquer pessoa pode aceitar'} · Faltam {Math.max(0,task.maxAssignees-task.assigneeIds.length)} aceite(s) para começar.</p>
         </>
       ) : (
         <div className="tc-row">
-          {first ? (
-            <span className="row ellipsis" style={{ gap: 8, minWidth: 0 }}>
-              <Avatar member={first} size={28} />
-              <span className="ellipsis">{first.name}</span>
-              {assignees.length > 1 && <span className="muted small">+{assignees.length - 1}</span>}
-            </span>
-          ) : (
-            <span className="muted">Sem responsável</span>
-          )}
+          <TaskPeople members={assignees} />
           {done ? (
             <span className="tc-done">
               <CheckCircle2 size={17} /> Concluída
@@ -307,7 +295,7 @@ function ListView({
               </td>
               <td className="hide-sm">
                 {t.assigneeIds.length ? (
-                  <AvatarStack members={t.assigneeIds.map((id) => membersById[id]).filter(Boolean)} size={28} />
+                  <TaskPeople members={t.assigneeIds.map(id => membersById[id]).filter(Boolean)} />
                 ) : (
                   <span className="muted small">Lim. 0/{t.maxAssignees}</span>
                 )}
