@@ -72,3 +72,10 @@ Revisão de 25/11/2026: campos numéricos da Agenda (vagas, intervalo e prazo) e
 A página interna do projeto mostra a descrição integral em um painel próprio, preservando as quebras de linha. Conteúdo > Driver organiza atalhos em campos com nome, foto e descrição. Cada campo contém atalhos com nome, foto e URL, com ações de criação, edição e exclusão para administradores. Contas comuns podem consultar, buscar e abrir os links.
 
 A busca geral procura campos por nome/descrição e atalhos por nome/URL; a busca em cada campo filtra apenas os próprios atalhos. O seletor de filtros lista os campos do banco, acompanha renomeações e exclusões e permite marcar vários, iniciando com todos. Campos novos entram automaticamente quando o filtro está em Todos. Imagens aceitam seletor ou arraste, com prévia. URLs internas mantêm a navegação e o submenu correspondente; URLs externas abrem em nova aba. As ações também aparecem em Auditoria e Relatórios > Histórico de ações. Requer a API com migração V13. As mudanças anteriores até 1.1.14 permanecem.
+
+
+## Portal 1.1.16 — criar tarefas abertas pelo Início e pelos Projetos
+
+Nova tarefa agora começa em Backlog, aberta para Qualquer pessoa, sem responsáveis ou candidatos pré-selecionados. Coluna de entrada distingue Backlog — aguardar aceites de A fazer — atribuir responsáveis. A tarefa pode ser criada sem vincular pessoas; só vai para A fazer após completar o número de aceites definido em Vagas necessárias para iniciar. Quem preferir atribuir diretamente escolhe A fazer e os responsáveis. Se tentar salvar A fazer sem responsáveis, Colocar no Backlog muda o modo e limpa a mensagem de atribuição antes de salvar. O formulário é compartilhado pelo Início e pelos Projetos.
+
+A seleção de convidados continua separada dos aceites e pode exceder as vagas. Trocar uma nova tarefa de A fazer para Backlog converte os responsáveis selecionados em candidatos, sem confirmar aceite. Tarefas existentes, seus aceites, a Agenda, o Driver e a API permanecem preservados; não há migração de banco nesta versão.

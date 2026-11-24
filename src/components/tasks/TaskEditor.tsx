@@ -8,7 +8,7 @@ import { Avatar, CategoryBadge, Modal, PriorityBadge, Progress } from '@/compone
 import { FormDateInput } from '@/components/ui/DateInput';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/context/ToastContext';
-import { categoryLabel, cx, priorityLabel, shortDate, statusLabel, statusOrder, ticketLabel } from '@/lib/labels';
+import { categoryLabel, cx, priorityLabel, shortDate, statusLabel, ticketLabel } from '@/lib/labels';
 import { tasksService } from '@/services';
 import { uid } from '@/services/core';
 import type { Category, ChecklistItem, Priority, Task, TaskInput } from '@/types/models';
@@ -22,11 +22,11 @@ const blank: TaskInput = {
   description: '',
   projectId: null,
   category: 'programacao',
-  status: 'a_fazer',
+  status: 'backlog',
   priority: 'media',
   assigneeIds: [],
   eligibleAssigneeIds: [],
-  open: false,
+  open: true,
   maxAssignees: 3,
   dueDate: null,
   checklist: [],
@@ -91,6 +91,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
     setForm(value => status === 'backlog'
       ? {...value,status,open:true,eligibleAssigneeIds:value.assigneeIds.length ? value.assigneeIds : value.eligibleAssigneeIds,assigneeIds:[]}
       : {...value,status,open:false});
+    setErrors(({assignees,eligible,...remaining})=>remaining);
   };
 
   const toggleItem = async (item: ChecklistItem) => {
@@ -275,10 +276,12 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
             </select>
           </div>
           <div className="field">
-            <label htmlFor="t-st">Status</label>
+            <label htmlFor="t-st">{existing ? 'Status' : 'Coluna de entrada *'}</label>
             {existing ? <><span className="badge outline">{statusLabel[form.status]}</span><TaskWorkflow task={{...existing, status:form.status}} onMoved={status => set('status', status)} onFinalized={onClose} /></> : <select id="t-st" className="select" value={form.status} onChange={e => changeInitialStatus(e.target.value as TaskInput['status'])}>
-              {statusOrder.filter(s => s === 'backlog' || s === 'a_fazer').map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
+              <option value="backlog">Backlog — aguardar aceites</option>
+              <option value="a_fazer">A fazer — atribuir responsáveis</option>
             </select>}
+            {!existing&&<span className="muted small">{isBacklog?'Não precisa vincular ninguém. A tarefa aguarda os aceites antes de ir para A fazer.':'Selecione quem já ficará responsável. Para oferecer vagas sem atribuir, use o Backlog.'}</span>}
           </div>
           <div className="field">
             <label htmlFor="t-pr">Prioridade</label>
@@ -322,7 +325,7 @@ function TaskModal({ args, onClose }: { args: OpenArgs; onClose: () => void }) {
           </> : <div className="field full">
             <span className="label">Responsáveis</span>
             <div className="chips">{members.filter(member => member.active || form.assigneeIds.includes(member.id)).map(member => <button key={member.id} type="button" className={cx('chip',form.assigneeIds.includes(member.id)&&'active')} disabled={!!existing?.scheduleIndividual} aria-label={`Atribuir ${member.name}`} aria-pressed={form.assigneeIds.includes(member.id)} onClick={() => toggleAssignee(member.id)} style={{paddingLeft:4}}><Avatar member={member} size={26}/>{member.name.split(' ')[0]}</button>)}</div>
-            {errors.assignees && <span className="form-error small">{errors.assignees}</span>}
+            {errors.assignees && <span className="form-error small">{errors.assignees}{!existing&&form.assigneeIds.length===0&&<button type="button" className="btn sm" style={{marginTop:8}} onClick={()=>changeInitialStatus('backlog')}>Colocar no Backlog</button>}</span>}
           </div>}
           <div className="field full">
             <div className="row">
