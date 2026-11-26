@@ -254,7 +254,8 @@ export interface ShortcutInput {
 }
 
 export interface UserPreferences {
-  theme: 'dark' | 'light' | 'system';
+  /** hybrid = menu lateral e topo escuros com conteúdo claro. */
+  theme: 'dark' | 'light' | 'system' | 'hybrid';
   reducedMotion: boolean;
   notifications: {
     taskAssigned: boolean;

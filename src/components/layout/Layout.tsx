@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   SquareCheck,
   Sun,
+  SunMoon,
   TrendingUp,
   UserRound,
   Users,
@@ -175,19 +176,22 @@ function NavLeafLink({ item, badge, sub, tabIndex }: { item: NavLeaf; badge: num
   );
 }
 
-const themeLabel: Record<'dark' | 'light', string> = { dark: 'Escuro', light: 'Claro' };
+type QuickTheme = 'dark' | 'light' | 'hybrid';
+const themeCycle: QuickTheme[] = ['dark', 'light', 'hybrid'];
+const themeLabel: Record<QuickTheme, string> = { dark: 'Escuro', light: 'Claro', hybrid: 'Misto (menu escuro, conteúdo claro)' };
+const themeIcon = { dark: Moon, light: Sun, hybrid: SunMoon };
 
-/** Alternância rápida com dois estados: Escuro (lua) ↔ Claro (sol). "Seguir o sistema" fica só em Configurações. */
+/** Alternância rápida: Escuro (lua) → Claro (sol) → Misto (sol/lua) → Escuro. "Seguir o sistema" fica em Configurações. */
 function ThemeToggle() {
   const { prefs, setPrefs } = usePrefs();
   const toast = useToast();
-  // Se a conta estiver em "Seguir o sistema", o botão mostra a aparência que está na tela agora.
-  const current: 'dark' | 'light' =
+  // Em "Seguir o sistema", o botão mostra a aparência que está na tela agora.
+  const current: QuickTheme =
     prefs.theme === 'system'
       ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
       : prefs.theme;
-  const next = current === 'dark' ? 'light' : 'dark';
-  const Icon = current === 'light' ? Sun : Moon;
+  const next = themeCycle[(themeCycle.indexOf(current) + 1) % themeCycle.length];
+  const Icon = themeIcon[current];
   const label = `Tema: ${themeLabel[current]}. Clique para mudar para ${themeLabel[next]}.`;
   return (
     <button

@@ -29,7 +29,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const apply = () => {
       const sys = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-      root.dataset.theme = prefs.theme === 'system' ? sys : prefs.theme;
+      // Misto: conteúdo no tema claro e moldura (menu lateral + topo) no escuro.
+      root.dataset.theme = prefs.theme === 'system' ? sys : prefs.theme === 'hybrid' ? 'light' : prefs.theme;
+      if (prefs.theme === 'hybrid') root.dataset.chrome = 'dark';
+      else delete root.dataset.chrome;
     };
     apply();
     root.dataset.motion = prefs.reducedMotion ? 'reduced' : 'full';
