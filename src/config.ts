@@ -1,7 +1,7 @@
 export const appConfig = {
   appName: 'Firewalldo',
   appSubtitle: 'Portal de Desenvolvimento',
-  version: 'Portal V1.1.18',
+  version: 'Portal V1.1.19',
   dataSource: (import.meta.env.VITE_DATA_SOURCE ?? 'mock') as 'mock' | 'api',
   apiBaseUrl: import.meta.env.VITE_API_URL ?? '/api',
   /** Latência simulada (ms) para exibir os estados de carregamento. */

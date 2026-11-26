@@ -181,15 +181,12 @@ const themeCycle: QuickTheme[] = ['dark', 'light', 'hybrid'];
 const themeLabel: Record<QuickTheme, string> = { dark: 'Escuro', light: 'Claro', hybrid: 'Misto (menu escuro, conteúdo claro)' };
 const themeIcon = { dark: Moon, light: Sun, hybrid: SunMoon };
 
-/** Alternância rápida: Escuro (lua) → Claro (sol) → Misto (sol/lua) → Escuro. "Seguir o sistema" fica em Configurações. */
+/** Alternância rápida: Escuro (lua) → Claro (sol) → Misto (sol/lua) → Escuro. */
 function ThemeToggle() {
   const { prefs, setPrefs } = usePrefs();
   const toast = useToast();
-  // Em "Seguir o sistema", o botão mostra a aparência que está na tela agora.
-  const current: QuickTheme =
-    prefs.theme === 'system'
-      ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-      : prefs.theme;
+  // Contas antigas com "Seguir o sistema" salvo são tratadas como Escuro.
+  const current: QuickTheme = prefs.theme === 'system' ? 'dark' : prefs.theme;
   const next = themeCycle[(themeCycle.indexOf(current) + 1) % themeCycle.length];
   const Icon = themeIcon[current];
   const label = `Tema: ${themeLabel[current]}. Clique para mudar para ${themeLabel[next]}.`;

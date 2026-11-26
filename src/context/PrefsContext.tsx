@@ -27,18 +27,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    const apply = () => {
-      const sys = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-      // Misto: conteúdo no tema claro e moldura (menu lateral + topo) no escuro.
-      root.dataset.theme = prefs.theme === 'system' ? sys : prefs.theme === 'hybrid' ? 'light' : prefs.theme;
-      if (prefs.theme === 'hybrid') root.dataset.chrome = 'dark';
-      else delete root.dataset.chrome;
-    };
-    apply();
+    // V1.1.19: "Seguir o sistema" saiu. Contas que ainda tinham essa opção salva usam o Escuro.
+    // Misto: conteúdo no tema claro e moldura (menu lateral + topo) no escuro.
+    root.dataset.theme = prefs.theme === 'hybrid' || prefs.theme === 'light' ? 'light' : 'dark';
+    if (prefs.theme === 'hybrid') root.dataset.chrome = 'dark';
+    else delete root.dataset.chrome;
     root.dataset.motion = prefs.reducedMotion ? 'reduced' : 'full';
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
   }, [prefs.theme, prefs.reducedMotion]);
 
   /** Aplica na hora (tema muda imediatamente) e salva na conta; se falhar, volta ao valor anterior. */

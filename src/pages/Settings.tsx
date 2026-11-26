@@ -152,7 +152,7 @@ export default function SettingsPage() {
             <div className="section-head">
               <div>
                 <h2>Aparência</h2>
-                <p>O tema é aplicado e salvo ao selecionar. Misto deixa o menu e o topo escuros com o conteúdo claro. Seguir o sistema acompanha a aparência do dispositivo.</p>
+                <p>O tema é aplicado e salvo ao selecionar. Misto deixa o menu e o topo escuros com o conteúdo claro.</p>
               </div>
             </div>
             <div className="theme-opts">
@@ -160,9 +160,8 @@ export default function SettingsPage() {
                 { v: 'dark', l: 'Escuro (padrão)', bg: '#0b1426' },
                 { v: 'light', l: 'Claro', bg: '#f4f6fa' },
                 { v: 'hybrid', l: 'Misto', bg: 'linear-gradient(90deg,#0b1426 28%,#f4f6fa 28%)' },
-                { v: 'system', l: 'Seguir o sistema', bg: 'linear-gradient(135deg,#0b1426 50%,#f4f6fa 50%)' },
               ] as const).map((t) => (
-                <button key={t.v} className={cx('theme-opt', prefsDraft.theme === t.v && 'active')} onClick={async () => { try { await setPrefs({ ...prefsDraft, theme: t.v }); } catch (error) { toast({ tone: 'error', title: 'Não foi possível salvar o tema', description: (error as Error).message }); } }}>
+                <button key={t.v} className={cx('theme-opt', (prefsDraft.theme === 'system' ? 'dark' : prefsDraft.theme) === t.v && 'active')} onClick={async () => { try { await setPrefs({ ...prefsDraft, theme: t.v }); } catch (error) { toast({ tone: 'error', title: 'Não foi possível salvar o tema', description: (error as Error).message }); } }}>
                   <div className="sw" style={{ background: t.bg }} />
                   {t.l}
                 </button>
