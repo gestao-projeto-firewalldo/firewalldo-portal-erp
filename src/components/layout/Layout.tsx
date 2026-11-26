@@ -23,7 +23,6 @@ import {
   SlidersHorizontal,
   SquareCheck,
   Sun,
-  SunMoon,
   TrendingUp,
   UserRound,
   Users,
@@ -40,7 +39,7 @@ import { useToast } from '@/context/ToastContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { notificationsService, tasksService } from '@/services';
 import { cx, roleLabel } from '@/lib/labels';
-import type { AppNotification, Permission, UserPreferences } from '@/types/models';
+import type { AppNotification, Permission } from '@/types/models';
 
 /** Telas fora do menu (acessíveis por link): /biblioteca. */
 export const extraRoutes = [
@@ -176,17 +175,19 @@ function NavLeafLink({ item, badge, sub, tabIndex }: { item: NavLeaf; badge: num
   );
 }
 
-const themeOrder: UserPreferences['theme'][] = ['dark', 'light', 'system'];
-const themeLabel: Record<UserPreferences['theme'], string> = { dark: 'Escuro', light: 'Claro', system: 'Seguir o sistema' };
-const themeIcon = { dark: Moon, light: Sun, system: SunMoon };
+const themeLabel: Record<'dark' | 'light', string> = { dark: 'Escuro', light: 'Claro' };
 
-/** Alternância rápida: Escuro (lua) → Claro (sol) → Sistema (sol/lua) → Escuro. */
+/** Alternância rápida com dois estados: Escuro (lua) ↔ Claro (sol). "Seguir o sistema" fica só em Configurações. */
 function ThemeToggle() {
   const { prefs, setPrefs } = usePrefs();
   const toast = useToast();
-  const current = prefs.theme;
-  const next = themeOrder[(themeOrder.indexOf(current) + 1) % themeOrder.length];
-  const Icon = themeIcon[current];
+  // Se a conta estiver em "Seguir o sistema", o botão mostra a aparência que está na tela agora.
+  const current: 'dark' | 'light' =
+    prefs.theme === 'system'
+      ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : prefs.theme;
+  const next = current === 'dark' ? 'light' : 'dark';
+  const Icon = current === 'light' ? Sun : Moon;
   const label = `Tema: ${themeLabel[current]}. Clique para mudar para ${themeLabel[next]}.`;
   return (
     <button
